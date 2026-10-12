@@ -21,12 +21,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          set -e
+          SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMGR" ]; then SDKMGR="$(command -v sdkmanager)"; fi
+          echo "Using sdkmanager: $SDKMGR"
+          yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
