@@ -49,6 +49,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /** A file or image attached in the composer, not yet sent. */
 data class Attachment(
@@ -83,6 +84,8 @@ data class ChatUiState(
     val pendingAttachments: Int = 0,
     /** Bumped when the composer should take focus (edit, suggestion). */
     val focusTick: Int = 0,
+    /** Chats whose reply is still running (possibly in the background). */
+    val runningChats: Set<String> = emptySet(),
 ) {
     val attaching: Boolean get() = pendingAttachments > 0
 }
@@ -118,13 +121,28 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     val state: StateFlow<ChatUiState> = _state
     val settingsState get() = settings.state
 
-    private var agentJob: Job? = null
+    /** Jobs of running agent turns, by chat id. Main thread only. */
+    private val jobs = HashMap<String, Job>()
 
-    /** Id of the newest agent run; callbacks of older runs must not touch the UI. */
-    @Volatile private var activeRun = 0
+    /**
+     * Chat id -> id of the run that is live in that chat. Read from OkHttp/IO threads to
+     * decide whether a callback may still touch the screen.
+     */
+    private val liveRun = ConcurrentHashMap<String, Int>()
 
-    /** Bumped on every navigation (new chat, open chat, send); async loads check it. */
+    /**
+     * Chat id -> newest run allowed to save it. Unlike [liveRun] it survives the end of
+     * the run, so a stale run that finishes late can never overwrite newer saves.
+     */
+    private val saveOwner = ConcurrentHashMap<String, Int>()
+
+    private var runSeq = 0
+
+    /** Bumped on every navigation; async chat loads check it. Main thread only. */
     private var navSeq = 0
+
+    /** Bumped whenever the composer content is replaced; attachment decodes check it. */
+    private var composerSeq = 0
 
     /** Chats deleted in this session. Only touched on [ioSerial]. */
     private val deletedIds = HashSet<String>()
@@ -147,7 +165,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.Main) {
                 val s = _state.value
                 val pristine = navSeq == 0 && s.chatId == null && s.messages.isEmpty() && !s.busy &&
-                    s.composerText.isEmpty() && s.attachments.isEmpty()
+                    s.composerText.isEmpty() && s.attachments.isEmpty() && s.pendingAttachments == 0
                 if (pristine) show(chat)
             }
         }
@@ -155,19 +173,19 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ navigation
 
+    /** Starts a new chat. A reply still running elsewhere keeps going in the background. */
     fun newChat() {
-        stopAgent()
         navSeq++
+        composerSeq++
         settings.lastChatId = null
         chatContext = null
         savedDraft = null
-        _state.update { ChatUiState(chats = it.chats) }
+        _state.update { ChatUiState(chats = it.chats, runningChats = it.runningChats) }
     }
 
     fun openChat(id: String) {
-        if (id == _state.value.chatId) return
-        stopAgent()
         val seq = ++navSeq
+        if (id == _state.value.chatId) return
         viewModelScope.launch(ioSerial) {
             val chat = safeStore { store.load(id) }
             withContext(Dispatchers.Main) {
@@ -183,17 +201,21 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     private fun show(chat: ChatFile) {
+        composerSeq++
         chatContext = chat.context
         savedDraft = null
+        val running = liveRun.containsKey(chat.meta.id)
         _state.update {
             it.copy(
                 chatId = chat.meta.id,
                 title = chat.meta.title,
                 starred = chat.meta.starred,
-                messages = History.repair(chat.messages, "Interrumpido."),
+                // A chat whose reply is still running shows its saved progress; the live
+                // run takes over the screen again with its next update.
+                messages = if (running) chat.messages else History.repair(chat.messages, "Interrumpido."),
                 draft = null,
                 runningTools = emptySet(),
-                busy = false,
+                busy = running,
                 notice = null,
                 editingIndex = null,
                 composerText = "",
@@ -210,6 +232,8 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             val meta = safeStore { store.list() }?.firstOrNull { it.id == id } ?: return@launch
             safeStore { store.updateMeta(meta.copy(title = t, titled = true)) }
             refreshList()
+            // Re-apply after the write so ioSerial order decides (an auto-title cannot win).
+            _state.update { if (it.chatId == id) it.copy(title = t) else it }
         }
     }
 
@@ -224,6 +248,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteChat(id: String) {
+        jobs.remove(id)?.cancel()
         if (_state.value.chatId == id) newChat()
         viewModelScope.launch(ioSerial) {
             // Tombstone first, so a stopping run's final save cannot bring it back.
@@ -262,29 +287,41 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         val msg = s.messages.getOrNull(index) ?: return
         if (!History.isHumanTurn(msg)) return
         if (s.editingIndex == null) savedDraft = s.composerText to s.attachments
-        val blocks = History.blocks(msg)
-        val text = blocks.filter { History.type(it) == "text" }
-            .map { History.str(it, "text") ?: "" }
-            .filterNot { it.startsWith(History.ATTACHMENT_PREFIX) }
-            .joinToString("\n\n")
-        _state.update { it.copy(editingIndex = index, composerText = text, attachments = emptyList(), focusTick = it.focusTick + 1) }
-        // Former attachments come back as removable chips.
-        blocks.forEach { b ->
-            val t = History.type(b)
-            val isAttachmentText = t == "text" && (History.str(b, "text") ?: "").startsWith(History.ATTACHMENT_PREFIX)
-            if (t == "image" || t == "document" || isAttachmentText) addAttachment { attachmentFromBlock(b) }
+        composerSeq++
+        _state.update {
+            it.copy(editingIndex = index, composerText = humanText(msg), attachments = emptyList(),
+                pendingAttachments = 0, focusTick = it.focusTick + 1)
         }
+        restoreAttachments(msg)
     }
 
     fun cancelEdit() {
         val draft = savedDraft
         savedDraft = null
+        composerSeq++
         _state.update {
             it.copy(
                 editingIndex = null,
                 composerText = draft?.first ?: "",
                 attachments = draft?.second ?: emptyList(),
+                pendingAttachments = 0,
             )
+        }
+    }
+
+    /** The text the person typed in a human turn (without attachment blocks). */
+    private fun humanText(msg: JsonObject): String = History.blocks(msg)
+        .filter { History.type(it) == "text" }
+        .map { History.str(it, "text") ?: "" }
+        .filterNot { it.startsWith(History.ATTACHMENT_PREFIX) }
+        .joinToString("\n\n")
+
+    /** Turns the images/files of a sent message back into removable composer chips. */
+    private fun restoreAttachments(msg: JsonObject) {
+        History.blocks(msg).forEach { b ->
+            val t = History.type(b)
+            val isAttachmentText = t == "text" && (History.str(b, "text") ?: "").startsWith(History.ATTACHMENT_PREFIX)
+            if (t == "image" || t == "document" || isAttachmentText) addAttachment { attachmentFromBlock(b) }
         }
     }
 
@@ -301,8 +338,15 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         val editing = s.editingIndex
         val base = if (editing != null) s.messages.subList(0, editing.coerceAtMost(s.messages.size)) else s.messages
         val history = History.appendUser(History.repair(base, "Interrumpido."), content)
+        // Base64 payloads are sent with every request; refuse what the API cannot take.
+        val payload = history.sumOf { m -> History.blocks(m).sumOf { b -> payloadSize(b) } }
+        if (payload > MAX_REQUEST_PAYLOAD) {
+            _state.update { it.copy(notice = "Demasiados archivos en este chat para enviarlos juntos. Quita algún adjunto o empieza un chat nuevo.") }
+            return
+        }
         savedDraft = null
         navSeq++
+        composerSeq++
 
         val now = System.currentTimeMillis()
         val meta = currentMeta(now) ?: ChatMeta(
@@ -312,19 +356,25 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             updatedAt = now,
             model = settings.model,
         )
-        val context = chatContext ?: buildContext().also { chatContext = it }
+        val context = contextForChat()
         settings.lastChatId = meta.id
         _state.update {
             it.copy(
                 chatId = meta.id,
-                title = meta.title,
+                title = if (it.chatId == meta.id) it.title else meta.title,
                 composerText = "",
                 attachments = emptyList(),
+                pendingAttachments = 0,
                 editingIndex = null,
                 notice = null,
             )
         }
         runAgent(history, meta, context)
+    }
+
+    private fun payloadSize(b: JsonObject): Int {
+        val src = b["source"] as? JsonObject
+        return (src?.let { History.str(it, "data") }?.length ?: 0) + (History.str(b, "text")?.length ?: 0)
     }
 
     /**
@@ -334,21 +384,20 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     fun retry() {
         val s = _state.value
         if (s.busy) return
+        if (s.editingIndex != null) cancelEdit()
         val repaired = History.repair(s.messages, "Interrumpido.")
         val last = repaired.lastOrNull() ?: return
         val history = if (History.role(last) == "assistant") History.truncateForRetry(repaired) else repaired
         if (history.isEmpty() || History.role(history.last()) != "user") return
         val meta = currentMeta(System.currentTimeMillis()) ?: return
-        val context = chatContext ?: buildContext().also { chatContext = it }
+        val context = contextForChat()
         _state.update { it.copy(notice = null) }
         runAgent(history, meta, context)
     }
 
-    fun stop() = stopAgent()
-
-    private fun stopAgent() {
-        agentJob?.cancel()
-        agentJob = null
+    /** Stops the reply of the chat on screen. */
+    fun stop() {
+        _state.value.chatId?.let { jobs[it]?.cancel() }
     }
 
     private fun currentMeta(now: Long): ChatMeta? {
@@ -357,38 +406,60 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         return (known ?: ChatMeta(id, _state.value.title, now, now)).copy(updatedAt = now)
     }
 
+    /**
+     * The chat's frozen context. It is rebuilt only if the working directory changed,
+     * because the model would otherwise keep using the old path (earlier thinking blocks
+     * are then dropped by the server instead of rejected).
+     */
+    private fun contextForChat(): String {
+        val existing = chatContext
+        val ctx = if (existing != null && existing.contains(workdirLine())) existing else buildContext()
+        chatContext = ctx
+        return ctx
+    }
+
+    private fun workdirLine() = "Directorio de trabajo: ${workspace.resolve(".").canonicalPath}\n"
+
     // ------------------------------------------------------------------ agent
 
     private fun runAgent(history: List<JsonObject>, meta0: ChatMeta, context: String) {
-        val mine = ++activeRun
+        val mine = ++runSeq
+        val chatId = meta0.id
+        liveRun[chatId] = mine
+        saveOwner[chatId] = mine
+        _state.update { it.copy(runningChats = liveRun.keys.toSet()) }
         var meta = meta0.copy(model = settings.model)
         var current = history
         var lastDraft: List<JsonObject>? = null
         var refused = false
 
-        /** True while this run still owns the screen. */
-        fun owns(s: ChatUiState) = activeRun == mine && s.chatId == meta.id
+        /** True while this run is the live one of the chat that is on screen. */
+        fun owns(s: ChatUiState) = s.chatId == chatId && liveRun[chatId] == mine
 
-        _state.update { it.copy(messages = history, draft = null, busy = true, runningTools = emptySet()) }
-        persist(meta, current, context)
+        _state.update { if (it.chatId == chatId) it.copy(messages = history, draft = null, busy = true, runningTools = emptySet()) else it }
+        persist(meta, current, context, mine)
 
         val listener = object : ClaudeClient.Listener {
             override fun onDraft(blocks: List<JsonObject>?) {
                 if (blocks != null) lastDraft = blocks
-                _state.update { if (owns(it)) it.copy(draft = blocks) else it }
+                _state.update { if (owns(it)) it.copy(draft = blocks, busy = true) else it }
             }
             override fun onAppend(message: JsonObject) {
                 current = current + message
                 lastDraft = null
-                _state.update { if (owns(it)) it.copy(messages = current, draft = null) else it }
+                _state.update { if (owns(it)) it.copy(messages = current, draft = null, busy = true) else it }
                 meta = meta.copy(updatedAt = System.currentTimeMillis())
-                persist(meta, current, context)
+                persist(meta, current, context, mine)
             }
             override fun onToolRunning(id: String, running: Boolean) = _state.update { s ->
                 if (!owns(s)) s else s.copy(runningTools = if (running) s.runningTools + id else s.runningTools - id)
             }
             override fun onNotice(text: String) = _state.update { if (owns(it)) it.copy(notice = text) else it }
             override fun onRefusal() { refused = true }
+            override fun onThinkingStripped() {
+                // The server rejected earlier thinking blocks; keep the history without them.
+                current = History.withoutThinking(current)
+            }
         }
 
         /** Keeps what Claude had already written when a run ends early. */
@@ -402,7 +473,8 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             lastDraft = null
         }
 
-        agentJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
+            val self = coroutineContext[Job]
             var error: Exception? = null
             try {
                 withContext(Dispatchers.IO) { client.run(history, config(context), listener) }
@@ -416,10 +488,13 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
                 withContext(NonCancellable) {
                     current = History.repair(current, "Interrumpido.")
                     meta = meta.copy(updatedAt = System.currentTimeMillis())
-                    persist(meta, current, context)
-                    if (activeRun == mine) {
+                    persist(meta, current, context, mine)
+                    val wasLive = liveRun.remove(chatId, mine)
+                    if (jobs[chatId] === self) jobs.remove(chatId)
+                    _state.update { it.copy(runningChats = liveRun.keys.toSet()) }
+                    if (wasLive) {
                         _state.update {
-                            if (it.chatId != meta.id) it else it.copy(
+                            if (it.chatId != chatId) it else it.copy(
                                 messages = current,
                                 draft = null,
                                 busy = false,
@@ -431,26 +506,37 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
                 }
             }
             // Only reached when the run was not cancelled.
-            if (activeRun != mine || _state.value.chatId != meta.id) return@launch
+            if (error == null && !refused) maybeTitle(chatId, current)
+            val s = _state.value
+            if (s.chatId != chatId || s.busy) return@launch
             val lastHuman = History.lastHumanIndex(current)
             val endsWithHuman = lastHuman >= 0 && lastHuman == current.lastIndex
             val rejectedInput = (error as? ApiException)?.status.let { it == 400 || it == 413 }
-            if (endsWithHuman && (refused || rejectedInput)) {
-                // Let the user fix the message (or drop an attachment) instead of resending it.
-                startEdit(lastHuman)
-            } else if (error == null) {
-                maybeTitle(meta.id, current)
+            // A refused or rejected message goes back to the composer (if it is free) so it
+            // can be fixed, instead of being merged with whatever is sent next.
+            if (endsWithHuman && (refused || rejectedInput) && s.composerText.isBlank() &&
+                s.attachments.isEmpty() && s.pendingAttachments == 0 && s.editingIndex == null
+            ) {
+                val failed = current[lastHuman]
+                current = current.subList(0, lastHuman)
+                saveOwner[chatId] = mine
+                persist(meta, current, context, mine)
+                composerSeq++
+                _state.update { it.copy(messages = current, composerText = humanText(failed), focusTick = it.focusTick + 1) }
+                restoreAttachments(failed)
             }
         }
+        jobs[chatId] = job
     }
 
     /**
-     * Saves the transcript. User-owned metadata (title, star) always comes from the store,
-     * so a run never undoes a rename or star made while it was running.
+     * Saves the transcript, if [run] is still the newest run of that chat. User-owned
+     * metadata (title, star) always comes from the store, so a run never undoes a rename
+     * or star made while it was running.
      */
-    private fun persist(meta: ChatMeta, messages: List<JsonObject>, context: String) {
+    private fun persist(meta: ChatMeta, messages: List<JsonObject>, context: String, run: Int) {
         viewModelScope.launch(ioSerial + NonCancellable) {
-            if (meta.id in deletedIds) return@launch
+            if (meta.id in deletedIds || saveOwner[meta.id] != run) return@launch
             safeStore {
                 val stored = store.list().firstOrNull { it.id == meta.id }
                 val m = if (stored == null) meta else meta.copy(
@@ -505,7 +591,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
      */
     private fun buildContext(): String = buildString {
         append("Dispositivo: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}).\n")
-        append("Directorio de trabajo: ${workspace.resolve(".").canonicalPath}\n")
+        append(workdirLine())
         append("La salida de run_shell indica [shizuku] (permisos de depuración) o [sandbox] (solo la app).\n")
         append("Fecha de inicio de la conversación: ${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.")
         val name = settings.displayName.trim()
@@ -522,13 +608,13 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     private fun addAttachment(make: () -> Attachment) {
-        val seq = navSeq
+        val seq = composerSeq
         _state.update { it.copy(pendingAttachments = it.pendingAttachments + 1) }
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching(make)
             withContext(Dispatchers.Main) {
-                // The chat changed meanwhile: its state (and counter) was already reset.
-                if (navSeq != seq) return@withContext
+                // The composer was replaced meanwhile: its content and counter were reset.
+                if (composerSeq != seq) return@withContext
                 _state.update { s ->
                     val pending = (s.pendingAttachments - 1).coerceAtLeast(0)
                     result.fold(
@@ -666,5 +752,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         private const val MAX_IMAGE_SIDE = 1568
         private const val MAX_FILE_BYTES = 15_000_000
         private const val MAX_TEXT_CHARS = 300_000
+        /** Total characters of base64/text payload allowed in one request (~22 MB). */
+        private const val MAX_REQUEST_PAYLOAD = 30_000_000
     }
 }

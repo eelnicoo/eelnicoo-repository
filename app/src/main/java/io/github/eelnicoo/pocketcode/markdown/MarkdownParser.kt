@@ -71,7 +71,9 @@ object MarkdownParser {
         while (i < lines.size) {
             val line = lines[i]
             val fence = fence(line)
-            if (fence == null && !listRe.matches(line) && line.isNotBlank()) listIndents.clear()
+            // Only an unindented non-list line ends the list run (indented ones may follow an
+            // in-item code fence and must not reset the nesting).
+            if (fence == null && !listRe.matches(line) && line.isNotBlank() && !line[0].isWhitespace()) listIndents.clear()
             when {
                 fence != null -> {
                     flushPara()
@@ -226,12 +228,19 @@ object MarkdownParser {
                     }
                 }
                 (s.startsWith("***", i) || s.startsWith("___", i)) && canOpen(s, i, 3) &&
-                    findClose(s, i + 3, s.substring(i, i + 3)) >= 0 -> {
+                    (findClose(s, i + 3, s.substring(i, i + 3)) >= 0 || tripleSplit(s, i) != null) -> {
                     val delim = s.substring(i, i + 3)
                     val close = findClose(s, i + 3, delim)
                     flush()
-                    out.add(Inline.Bold(listOf(Inline.Italic(parseInline(s.substring(i + 3, close))))))
-                    i = close + 3
+                    if (close >= 0) {
+                        out.add(Inline.Bold(listOf(Inline.Italic(parseInline(s.substring(i + 3, close))))))
+                        i = close + 3
+                    } else {
+                        // "***bold** italic*": bold closes first, then the outer italic.
+                        val (c2, c1) = tripleSplit(s, i)!!
+                        out.add(Inline.Italic(listOf(Inline.Bold(parseInline(s.substring(i + 3, c2)))) + parseInline(s.substring(c2 + 2, c1))))
+                        i = c1 + 1
+                    }
                 }
                 (s.startsWith("**", i) || s.startsWith("__", i)) && canOpen(s, i, 2) -> {
                     val delim = s.substring(i, i + 2)
@@ -313,6 +322,8 @@ object MarkdownParser {
             }
             if (s.startsWith(delim, k) && k > from && !s[k - 1].isWhitespace()) {
                 if (delim.length == 1) {
+                    // "*italic **bold***": the run of three closes the inner bold first.
+                    if (countRun(s, k, delim[0]) == 3 && hasUnclosedDouble(s.substring(from, k), delim[0])) return k + 2
                     val doubled = (k + 1 < s.length && s[k + 1] == delim[0]) || s[k - 1] == delim[0]
                     if (!doubled) return k
                     // Skip over a nested "**"/"__" pair as a unit.
@@ -332,6 +343,29 @@ object MarkdownParser {
             k++
         }
         return -1
+    }
+
+    /** For "***" at [i] closed as "**" then "*": positions of the "**" and the final "*". */
+    private fun tripleSplit(s: String, i: Int): Pair<Int, Int>? {
+        val d = s[i]
+        val c2 = findClose(s, i + 3, "$d$d")
+        if (c2 < 0) return null
+        val c1 = findClose(s, c2 + 2, "$d")
+        return if (c1 < 0) null else c2 to c1
+    }
+
+    /** True if [text] has an odd number of [ch][ch] runs (an unclosed bold opener). */
+    private fun hasUnclosedDouble(text: String, ch: Char): Boolean {
+        var count = 0
+        var k = 0
+        while (k < text.length) {
+            if (text[k] == ch) {
+                val run = countRun(text, k, ch)
+                if (run == 2) count++
+                k += run
+            } else k++
+        }
+        return count % 2 == 1
     }
 
     /** True if [text] has an odd number of lone [ch] delimiters (not part of a pair). */

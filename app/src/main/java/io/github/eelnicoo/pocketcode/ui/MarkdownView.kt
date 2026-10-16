@@ -72,9 +72,13 @@ fun MarkdownView(
     color: Color = LocalClaude.current.text,
     fontFamily: FontFamily = LocalReplyFont.current,
     fontSize: TextUnit = 16.sp,
+    /** True while the text is still arriving: skip expensive work that would redo every tick. */
+    streaming: Boolean = false,
 ) {
     val blocks = remember(markdown) { MarkdownParser.parse(markdown) }
     val base = TextStyle(color = color, fontFamily = fontFamily, fontSize = fontSize, lineHeight = fontSize * 1.55f)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         var i = 0
         while (i < blocks.size) {
@@ -83,17 +87,22 @@ fun MarkdownView(
                 // Consecutive list items render as one tight group.
                 val group = ArrayList<MdBlock.ListItem>()
                 while (i < blocks.size && blocks[i] is MdBlock.ListItem) { group.add(blocks[i] as MdBlock.ListItem); i++ }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { group.forEach { ListItemView(it, base) } }
+                // One marker column per list, sized for its largest number, so 9. and 10. align.
+                val maxNumber = group.filter { it.ordered }.maxOfOrNull { it.number }
+                val markerWidth = maxNumber?.let {
+                    with(density) { measurer.measure("$it.", base, softWrap = false, maxLines = 1).size.width.toDp() } + 8.dp
+                }?.coerceAtLeast(24.dp) ?: 24.dp
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { group.forEach { ListItemView(it, base, markerWidth) } }
                 continue
             }
-            BlockView(b, base)
+            BlockView(b, base, streaming && i == blocks.lastIndex)
             i++
         }
     }
 }
 
 @Composable
-private fun BlockView(b: MdBlock, base: TextStyle) {
+private fun BlockView(b: MdBlock, base: TextStyle, growing: Boolean = false) {
     val c = LocalClaude.current
     when (b) {
         is MdBlock.Paragraph -> Text(rememberInline(b.inlines), style = base)
@@ -118,17 +127,17 @@ private fun BlockView(b: MdBlock, base: TextStyle) {
                 b.blocks.forEach { BlockView(it, base.copy(color = c.textSecondary)) }
             }
         }
-        is MdBlock.ListItem -> ListItemView(b, base)
-        is MdBlock.Table -> TableView(b, base)
+        is MdBlock.ListItem -> ListItemView(b, base, 24.dp)
+        is MdBlock.Table -> TableView(b, base, measure = !growing)
         MdBlock.Rule -> HorizontalDivider(color = c.border, modifier = Modifier.padding(vertical = 6.dp))
     }
 }
 
 @Composable
-private fun ListItemView(item: MdBlock.ListItem, base: TextStyle) {
+private fun ListItemView(item: MdBlock.ListItem, base: TextStyle, markerWidth: androidx.compose.ui.unit.Dp) {
     val c = LocalClaude.current
     Row(Modifier.padding(start = (item.level * 18).dp)) {
-        Box(Modifier.widthIn(min = 24.dp).padding(end = 4.dp), contentAlignment = Alignment.TopStart) {
+        Box(Modifier.width(markerWidth), contentAlignment = Alignment.TopStart) {
             when {
                 item.task != null -> Icon(
                     if (item.task) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
@@ -145,7 +154,7 @@ private fun ListItemView(item: MdBlock.ListItem, base: TextStyle) {
 }
 
 @Composable
-private fun TableView(t: MdBlock.Table, base: TextStyle) {
+private fun TableView(t: MdBlock.Table, base: TextStyle, measure: Boolean) {
     val c = LocalClaude.current
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -154,7 +163,15 @@ private fun TableView(t: MdBlock.Table, base: TextStyle) {
     val codeSpan = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp)
     // Column widths from the real measured width of the widest cell (no wrapping),
     // plus the cell padding, clamped to a sane range.
-    val widths = remember(t, cellStyle, density) {
+    val widths = remember(t, cellStyle, density, measure) {
+        if (!measure) {
+            // Still streaming: a cheap estimate; real measuring happens once the table is final.
+            return@remember List(t.header.size) { col ->
+                val longest = (listOf(t.header[col]) + t.rows.map { it[col] })
+                    .maxOf { MarkdownParser.plain(it).length }
+                (longest * 9 + 24).coerceIn(72, 280)
+            }
+        }
         fun measure(cell: List<Inline>, style: TextStyle): Int {
             val text = buildAnnotatedString { appendInlines(cell, codeSpan, TextLinkStyles()) }
             return measurer.measure(text, style = style, softWrap = false, maxLines = 1).size.width

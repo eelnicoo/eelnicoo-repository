@@ -102,7 +102,6 @@ fun UserMessage(row: UserRow, canEdit: Boolean, onEdit: (Int) -> Unit) {
     val c = LocalClaude.current
     val clipboard = LocalClipboardManager.current
     val haptics = LocalHapticFeedback.current
-    var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         if (row.images.isNotEmpty()) {
             Row(
@@ -113,7 +112,9 @@ fun UserMessage(row: UserRow, canEdit: Boolean, onEdit: (Int) -> Unit) {
             }
         }
         row.files.forEach { FileChip(it, Modifier.padding(bottom = 6.dp)) }
-        if (row.text.isNotBlank()) {
+        row.texts.forEachIndexed { k, bubbleText ->
+            if (k > 0) Spacer(Modifier.size(6.dp))
+            var menu by remember { mutableStateOf(false) }
             Box {
                 Box(
                     Modifier
@@ -129,13 +130,13 @@ fun UserMessage(row: UserRow, canEdit: Boolean, onEdit: (Int) -> Unit) {
                         )
                         .padding(horizontal = 16.dp, vertical = 11.dp),
                 ) {
-                    Text(row.text, color = c.text, fontSize = 16.sp, lineHeight = 23.sp)
+                    Text(bubbleText, color = c.text, fontSize = 16.sp, lineHeight = 23.sp)
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text("Copiar") },
                         leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
-                        onClick = { clipboard.setText(AnnotatedString(row.text)); menu = false },
+                        onClick = { clipboard.setText(AnnotatedString(bubbleText)); menu = false },
                     )
                     if (canEdit) {
                         DropdownMenuItem(
@@ -200,7 +201,10 @@ fun AssistantTurn(row: AssistantRow, onRetry: () -> Unit) {
                 continue
             }
             when (p) {
-                is TextPart -> if (p.text.isNotEmpty()) SelectionContainer { MarkdownView(p.text) }
+                is TextPart -> if (p.text.isNotEmpty()) {
+                    val growing = row.streaming && i == parts.lastIndex
+                    SelectionContainer { MarkdownView(p.text, streaming = growing) }
+                }
                 is ThinkingPart -> ThinkingView(p)
                 else -> Unit
             }

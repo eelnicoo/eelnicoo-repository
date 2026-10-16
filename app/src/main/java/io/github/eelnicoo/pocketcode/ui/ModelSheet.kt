@@ -20,10 +20,14 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +45,18 @@ fun ModelSheet(
     val c = LocalClaude.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = c.composer) {
+        // The sheet lives in its own window, whose bar icons follow the system theme by
+        // default; align them with the in-app theme.
+        val view = LocalView.current
+        SideEffect {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: (view as? DialogWindowProvider)?.window
+            if (window != null) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !c.dark
+                    isAppearanceLightNavigationBars = !c.dark
+                }
+            }
+        }
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             Text("Modelo", color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 24.dp, bottom = 8.dp))

@@ -2,6 +2,7 @@ package io.github.eelnicoo.pocketcode.tools
 
 import io.github.eelnicoo.pocketcode.build.ApkBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -51,6 +52,7 @@ class BuildApkTool(
                 val classes = File(build, "classes")
                 val comp = builder.compileJava(ws.resolve(srcDir), classpath, classes)
                 if (!comp.ok) return@withContext ToolResult(comp.log, true)
+                ensureActive() // Stop between build stages
                 val dexDir = File(build, "dex")
                 val dex = builder.dex(listOf(classes), classpath, minSdk, dexDir)
                 ToolResult(comp.log + "\n" + dex.log, isError = !dex.ok)
@@ -64,9 +66,11 @@ class BuildApkTool(
                 val classes = File(build, "classes")
                 val comp = builder.compileJava(ws.resolve(srcDir), classpath, classes)
                 if (!comp.ok) return@withContext ToolResult(comp.log, true)
+                ensureActive() // Stop between build stages
                 val dexDir = File(build, "dex")
                 val dex = builder.dex(listOf(classes), classpath, minSdk, dexDir)
                 if (!dex.ok || dex.output == null) return@withContext ToolResult(comp.log + "\n" + dex.log, true)
+                ensureActive()
                 val r = builder.rebuildApk(ws.resolve(template), dex.output, ws.resolve(outApk), minSdk)
                 ToolResult(comp.log + "\n" + dex.log + "\n" + r.log, isError = !r.ok)
             }

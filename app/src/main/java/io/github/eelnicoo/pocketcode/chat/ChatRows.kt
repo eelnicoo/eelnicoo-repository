@@ -18,6 +18,8 @@ data class UserRow(
     val text: String,
     val images: List<ImageRef>,
     val files: List<String>,
+    /** Each text the person sent in this turn (several after a stopped/failed reply). */
+    val texts: List<String> = listOf(text),
 ) : ChatRow
 
 /**
@@ -165,7 +167,7 @@ object ChatRows {
                 "document" -> files.add(History.str(b, "title") ?: "documento.pdf")
             }
         }
-        return UserRow("u$i", i, texts.joinToString("\n\n"), images, files)
+        return UserRow("u$i", i, texts.joinToString("\n\n"), images, files, texts.filter { it.isNotBlank() })
     }
 
     private fun partFor(

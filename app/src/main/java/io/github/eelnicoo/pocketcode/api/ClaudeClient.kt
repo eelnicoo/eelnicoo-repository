@@ -26,6 +26,7 @@ import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -56,6 +57,8 @@ class ClaudeClient(
         fun onNotice(text: String)
         /** Claude declined the last human turn (stop_reason "refusal"). */
         fun onRefusal() {}
+        /** Earlier thinking blocks were rejected and removed from the history being sent. */
+        fun onThinkingStripped() {}
     }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
@@ -65,13 +68,14 @@ class ClaudeClient(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    // Optional request features. If the server rejects one (HTTP 400 naming it), it is
-    // switched off for the rest of the session and the request is retried without it.
-    @Volatile private var useFallbacks = true
-    @Volatile private var useCache = true
-    @Volatile private var useThinkingParam = true
-    @Volatile private var useEffort = true
-    @Volatile private var useBlockBinding = true
+    // Optional request features. If the server rejects one for a model (HTTP 400 naming
+    // that parameter), it is switched off for that model for the rest of the session and
+    // the request is retried without it. Several chats may run at once, hence the sets.
+    private val noFallbacks = ConcurrentHashMap.newKeySet<String>()
+    private val noCache = ConcurrentHashMap.newKeySet<String>()
+    private val noThinking = ConcurrentHashMap.newKeySet<String>()
+    private val noEffort = ConcurrentHashMap.newKeySet<String>()
+    private val noBlockBinding = ConcurrentHashMap.newKeySet<String>()
 
     /**
      * Runs one agentic turn on top of [history] (which must end with a user message).
@@ -81,7 +85,11 @@ class ClaudeClient(
     suspend fun run(history: List<JsonObject>, cfg: Config, listener: Listener): List<JsonObject> {
         var h = history
         repeat(MAX_ITERATIONS) {
-            val asm = streamWithRetry(h, cfg, listener)
+            val asm = streamWithRetry(h, cfg, listener) {
+                // Keep the cleaned history for the rest of this run, not just one request.
+                h = History.withoutThinking(h)
+                listener.onThinkingStripped()
+            }
             listener.onDraft(null)
 
             if (asm.stopReason == "refusal") {
@@ -132,6 +140,8 @@ class ClaudeClient(
     }
 
     private suspend fun executeTool(tu: JsonObject, asm: StreamAssembler, listener: Listener): JsonObject {
+        // After Stop, the remaining tools of the batch must not start.
+        currentCoroutineContext().ensureActive()
         val id = History.str(tu, "id") ?: ""
         val name = History.str(tu, "name") ?: ""
         asm.invalidToolInputs[id]?.let { raw ->
@@ -150,11 +160,17 @@ class ClaudeClient(
         }
     }
 
-    private suspend fun streamWithRetry(h: List<JsonObject>, cfg: Config, listener: Listener): StreamAssembler {
+    private suspend fun streamWithRetry(
+        h: List<JsonObject>,
+        cfg: Config,
+        listener: Listener,
+        onStripped: () -> Unit,
+    ): StreamAssembler {
         var attempt = 0
         var refreshed = false
         var history = h
         var strippedThinking = false
+        val model = cfg.model
         while (true) {
             val asm = StreamAssembler()
             try {
@@ -173,19 +189,31 @@ class ClaudeClient(
                         oauth.refresh().getOrElse { throw ApiException(401, null, "Sesión caducada. Vuelve a iniciar sesión en Ajustes.") }
                         continue
                     }
-                    e.status == 400 && useBlockBinding && ("block_binding" in raw || "thinking-binding" in raw) -> { useBlockBinding = false; continue }
-                    e.status == 400 && aboutParams && useFallbacks && "fallbacks" in raw -> { useFallbacks = false; continue }
-                    e.status == 400 && aboutParams && useCache && "cache_control" in raw -> { useCache = false; continue }
-                    e.status == 400 && aboutParams && useEffort && ("output_config" in raw || "effort" in raw) -> { useEffort = false; continue }
-                    e.status == 400 && aboutParams && useThinkingParam && ("thinking.display" in raw || "thinking.type" in raw || raw.startsWith("thinking")) -> {
-                        useThinkingParam = false; continue
-                    }
-                    e.status == 400 && !strippedThinking && ("signature" in raw || ("thinking" in raw && !aboutParams)) -> {
-                        // A replayed thinking block was rejected (e.g. bound to another model or
-                        // prefix). Resend this request once without earlier thinking blocks.
+                    // A replayed thinking block was rejected (bound to another model or prefix):
+                    // resend once without earlier thinking blocks. Checked before any feature
+                    // switch so such an error never turns thinking off.
+                    e.status == 400 && !strippedThinking &&
+                        ("signature" in raw || "bound to" in raw || ("thinking" in raw && !aboutParams)) -> {
                         strippedThinking = true
                         history = History.withoutThinking(history)
+                        onStripped()
                         continue
+                    }
+                    e.status == 400 && aboutParams && model !in noBlockBinding && ("block_binding" in raw || "thinking-binding" in raw) -> {
+                        noBlockBinding.add(model); continue
+                    }
+                    e.status == 400 && aboutParams && model !in noFallbacks && ("fallbacks" in raw || "server-side-fallback" in raw) -> {
+                        noFallbacks.add(model); continue
+                    }
+                    e.status == 400 && aboutParams && model !in noCache && "cache_control" in raw -> {
+                        noCache.add(model); continue
+                    }
+                    e.status == 400 && aboutParams && model !in noEffort && ("output_config" in raw || "effort" in raw) -> {
+                        noEffort.add(model); continue
+                    }
+                    e.status == 400 && aboutParams && model !in noThinking &&
+                        ("thinking.display" in raw || "thinking.type" in raw || raw.startsWith("thinking")) -> {
+                        noThinking.add(model); continue
                     }
                     e.retryable && attempt < MAX_RETRIES -> {
                         attempt++
@@ -208,12 +236,14 @@ class ClaudeClient(
     private suspend fun streamOnce(h: List<JsonObject>, cfg: Config, asm: StreamAssembler, listener: Listener) {
         val token = oauth.validAccessToken()
             ?: throw ApiException(401, null, "No has iniciado sesión con tu cuenta Claude.")
-        val fallbacks = useFallbacks && Settings.modelInfo(cfg.model).supportsFallback
-        val body = buildRequest(h, cfg, fallbacks)
+        val fallbacks = cfg.model !in noFallbacks && Settings.modelInfo(cfg.model).supportsFallback
+        val thinking = cfg.model !in noThinking
+        val binding = thinking && cfg.model !in noBlockBinding
+        val body = buildRequest(h, cfg, fallbacks, thinking, binding)
         val betas = buildList {
             add(OAUTH_BETA)
             if (fallbacks) add(FALLBACK_BETA)
-            if (useThinkingParam && useBlockBinding) add(BLOCK_BINDING_BETA)
+            if (binding) add(BLOCK_BINDING_BETA)
         }.joinToString(",")
         val req = Request.Builder()
             .url("$API_BASE/v1/messages")
@@ -241,6 +271,8 @@ class ClaudeClient(
             var lastEmit = 0L
             var lastRev = -1
             for (data in channel) {
+                // Buffered events must not keep painting after Stop.
+                currentCoroutineContext().ensureActive()
                 asm.handle(data)
                 val now = System.currentTimeMillis()
                 if (asm.revision != lastRev && now - lastEmit >= DRAFT_INTERVAL_MS) {
@@ -278,7 +310,13 @@ class ClaudeClient(
         else -> "Error $code: $message"
     }
 
-    private fun buildRequest(h: List<JsonObject>, cfg: Config, fallbacks: Boolean): JsonObject = buildJsonObject {
+    private fun buildRequest(
+        h: List<JsonObject>,
+        cfg: Config,
+        fallbacks: Boolean,
+        thinking: Boolean,
+        binding: Boolean,
+    ): JsonObject = buildJsonObject {
         put("model", cfg.model)
         put("max_tokens", cfg.maxTokens)
         put("stream", true)
@@ -288,20 +326,20 @@ class ClaudeClient(
         })
         put("messages", JsonArray(h))
         put("tools", JsonArray(registry.defs()))
-        if (useThinkingParam) {
+        if (thinking) {
             put("thinking", buildJsonObject {
                 put("type", "adaptive")
                 put("display", "summarized")
-                if (useBlockBinding) {
+                if (binding) {
                     // Drop (instead of rejecting) thinking blocks whose prefix no longer matches.
                     put("block_binding", buildJsonObject { put("prefix_mismatch_behavior", "drop_block") })
                 }
             })
         }
-        if (useEffort && cfg.effort != null) {
+        if (cfg.model !in noEffort && cfg.effort != null) {
             put("output_config", buildJsonObject { put("effort", cfg.effort) })
         }
-        if (useCache) put("cache_control", buildJsonObject { put("type", "ephemeral") })
+        if (cfg.model !in noCache) put("cache_control", buildJsonObject { put("type", "ephemeral") })
         if (fallbacks) put("fallbacks", "default")
     }
 

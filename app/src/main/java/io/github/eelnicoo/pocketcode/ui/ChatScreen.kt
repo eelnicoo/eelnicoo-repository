@@ -66,7 +66,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,7 +77,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
@@ -113,10 +114,13 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
         uri?.let { vm.addFile(it) }
     }
     val context = LocalContext.current
-    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    // Saveable: the camera app may outlive this activity (rotation, process death).
+    var photoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = photoUri
+        photoUri = null
         if (ok && uri != null) vm.addImage(uri)
+        else if (ok) vm.showNotice("No se pudo recuperar la foto. Vuelve a intentarlo.")
     }
 
     // Tool results are indexed once per history, so 50 ms streaming ticks stay cheap.
@@ -130,6 +134,26 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
 
     // Closing the drawer must not leave the keyboard typing into its hidden search box.
     LaunchedEffect(drawer.isClosed) { if (drawer.isClosed) focus.clearFocus() }
+
+    // While the user reads higher up inside a streaming answer, compensate its growth so the
+    // text does not slide away. Done after layout and never during a fling or animation.
+    val streamingNow by rememberUpdatedState(state.busy)
+    LaunchedEffect(listState) {
+        var lastKey: Any? = null
+        var lastSize = 0
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key to it.size } }
+            .collect { info ->
+                val (key, size) = info ?: return@collect
+                val delta = size - lastSize
+                if (key == lastKey && delta > 0 && streamingNow && !listState.isScrollInProgress &&
+                    listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 0
+                ) {
+                    listState.requestScrollToItem(0, listState.firstVisibleItemScrollOffset + delta)
+                }
+                lastKey = key
+                lastSize = size
+            }
+    }
 
     // Jump to the newest message whenever a new row appears.
     LaunchedEffect(rows.size, state.chatId) {
@@ -148,6 +172,7 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                     open = drawer.isOpen,
                     chats = state.chats,
                     currentId = state.chatId,
+                    running = state.runningChats,
                     displayName = settings.displayName,
                     loggedIn = settings.loggedIn,
                     onNewChat = { vm.newChat(); scope.launch { drawer.close() } },
@@ -198,24 +223,7 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                         items(rows.asReversed(), key = { it.key }) { row ->
                             when (row) {
                                 is UserRow -> UserMessage(row, canEdit = !state.busy) { vm.startEdit(it) }
-                                is AssistantRow -> {
-                                    // While reading higher up in a streaming answer, compensate its growth
-                                    // so the text under the finger does not keep sliding away.
-                                    var lastHeight by remember { mutableIntStateOf(0) }
-                                    Box(
-                                        Modifier.onSizeChanged { size ->
-                                            val delta = size.height - lastHeight
-                                            if (row.streaming && lastHeight > 0 && delta > 0 &&
-                                                listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 0
-                                            ) {
-                                                listState.requestScrollToItem(0, listState.firstVisibleItemScrollOffset + delta)
-                                            }
-                                            lastHeight = size.height
-                                        },
-                                    ) {
-                                        AssistantTurn(row, onRetry = { vm.retry() })
-                                    }
-                                }
+                                is AssistantRow -> AssistantTurn(row, onRetry = { vm.retry() })
                             }
                         }
                     }
@@ -232,7 +240,10 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
             state.notice?.let { notice ->
                 NoticeBar(
                     text = notice,
-                    canRetry = !state.busy && state.editingIndex == null && History.lastHumanIndex(state.messages) >= 0,
+                    // Only when the chat really ends with an unanswered message; other notices
+                    // (attachments, camera, storage) must never re-run the last answer.
+                    canRetry = !state.busy && state.editingIndex == null &&
+                        state.messages.lastOrNull()?.let { History.role(it) == "user" } == true,
                     onRetry = { vm.retry() },
                     onDismiss = { vm.dismissNotice() },
                 )
@@ -254,6 +265,8 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                 onTakePhoto = {
                     runCatching {
                         val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                        // Old shots were already copied into the chat; keep recent ones that may still be decoding.
+                        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 10 * 60_000L }?.forEach { it.delete() }
                         val file = File(dir, "foto-${System.currentTimeMillis()}.jpg")
                         val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
                         photoUri = uri

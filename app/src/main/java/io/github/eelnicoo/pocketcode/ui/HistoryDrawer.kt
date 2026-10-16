@@ -62,6 +62,7 @@ fun HistoryDrawer(
     open: Boolean,
     chats: List<ChatMeta>,
     currentId: String?,
+    running: Set<String>,
     displayName: String,
     loggedIn: Boolean,
     onNewChat: () -> Unit,
@@ -131,13 +132,13 @@ fun HistoryDrawer(
             if (starred.isNotEmpty()) {
                 item { SectionHeader("Destacados") }
                 items(starred, key = { "s" + it.id }) { chat ->
-                    ChatItem(chat, chat.id == currentId, onOpen, { renaming = it }, onToggleStar, { deleting = it })
+                    ChatItem(chat, chat.id == currentId, chat.id in running, onOpen, { renaming = it }, onToggleStar, { deleting = it })
                 }
             }
             groups.forEach { (label, list) ->
                 item(key = "h$label") { SectionHeader(label) }
                 items(list, key = { it.id }) { chat ->
-                    ChatItem(chat, chat.id == currentId, onOpen, { renaming = it }, onToggleStar, { deleting = it })
+                    ChatItem(chat, chat.id == currentId, chat.id in running, onOpen, { renaming = it }, onToggleStar, { deleting = it })
                 }
             }
         }
@@ -219,6 +220,7 @@ private fun SectionHeader(label: String) {
 private fun ChatItem(
     chat: ChatMeta,
     selected: Boolean,
+    running: Boolean,
     onOpen: (String) -> Unit,
     onRename: (ChatMeta) -> Unit,
     onToggleStar: (String) -> Unit,
@@ -244,7 +246,8 @@ private fun ChatItem(
                 chat.title, color = if (selected) c.text else c.textSecondary, fontSize = 15.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
-            if (chat.starred) Icon(Icons.Filled.Star, null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
+            if (running) ClaudeSpark(size = 14.dp, animated = true, modifier = Modifier.padding(start = 6.dp))
+            else if (chat.starred) Icon(Icons.Filled.Star, null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(

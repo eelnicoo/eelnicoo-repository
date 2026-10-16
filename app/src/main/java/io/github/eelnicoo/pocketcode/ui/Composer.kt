@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,10 +85,15 @@ fun Composer(
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     // Editing a message or picking a suggestion moves the cursor here, like the Claude app.
+    // The tick is an event: a new composition (back from Settings, rotation) must not replay it.
+    var handledTick by rememberSaveable { mutableIntStateOf(focusTick) }
     LaunchedEffect(focusTick) {
-        if (focusTick > 0 && loggedIn) {
-            runCatching { focusRequester.requestFocus() }
-            keyboard?.show()
+        if (focusTick != handledTick) {
+            handledTick = focusTick
+            if (loggedIn) {
+                runCatching { focusRequester.requestFocus() }
+                keyboard?.show()
+            }
         }
     }
     Column(modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) {

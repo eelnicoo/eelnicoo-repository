@@ -134,4 +134,28 @@ class MarkdownParserTest {
         val comments = bash.filter { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.COMMENT }
         assertEquals(1, comments.size)
     }
+
+    @Test fun italicWrappingBoldAndSplitTriple() {
+        val a = MarkdownParser.parseInline("*italic **bold***").single() as Inline.Italic
+        assertEquals(Inline.Text("italic "), a.children[0])
+        assertEquals(Inline.Bold(listOf(Inline.Text("bold"))), a.children[1])
+        val b = MarkdownParser.parseInline("***Nota:** algo*").single() as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Text("Nota:"))), b.children[0])
+        assertEquals(Inline.Text(" algo"), b.children[1])
+        val c = MarkdownParser.parseInline("***a* b**").single() as Inline.Bold
+        assertEquals(Inline.Italic(listOf(Inline.Text("a"))), c.children[0])
+    }
+
+    @Test fun indentedTextAfterInItemFenceKeepsNesting() {
+        val md = "- a\n    - b\n        ```\n        x\n        ```\n        sigue\n    - c"
+        val levels = MarkdownParser.parse(md).filterIsInstance<MdBlock.ListItem>().map { it.level }
+        assertEquals(listOf(0, 1, 1), levels)
+    }
+
+    @Test fun degenerateInputsDoNotCrash() {
+        for (t in listOf("***", "**", "*", "[a](", "[a]", "```", "~~~", "\t- x", "| a |\n|---|", "> ", "#", "1.", "- ", "`", "__", "___x___")) {
+            MarkdownParser.parse(t)
+            MarkdownParser.parseInline(t)
+        }
+    }
 }
