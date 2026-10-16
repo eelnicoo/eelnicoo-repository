@@ -82,16 +82,29 @@ object CodeHighlighter {
 
     private val MARKUP = setOf("xml", "html", "svg", "manifest", "json", "jsonc")
 
+    private const val QUOTES = "\"'`"
+
     private fun lineEnd(code: String, from: Int): Int = code.indexOf('\n', from).let { if (it < 0) code.length else it }
 
     /**
      * Strings and comments, found by a single linear scan (no regex: java.util.regex recurses
      * on repeated groups, and a long literal could overflow the stack). Scanning in order also
      * means quotes inside comments and comment markers inside strings are handled right.
+     *
+     * A quote that never closes (an apostrophe in prose, a Rust lifetime) produces no token.
+     * In markup, quotes only start strings inside a tag; text content is left alone.
+     * [rawBacktick]: backtick strings have no escapes (Go raw strings).
      */
-    private fun scanLiterals(code: String, hash: Boolean, cLike: Boolean, xml: Boolean, singleQuote: Boolean, backtick: Boolean): List<Token> {
+    private fun scanLiterals(
+        code: String, hash: Boolean, cLike: Boolean, xml: Boolean, singleQuote: Boolean, backtick: Boolean,
+        rawBacktick: Boolean = false,
+    ): List<Token> {
         val out = ArrayList<Token>()
         val n = code.length
+        // After a quote fails to close at position e, no later quote of the same kind before e
+        // can close either (its scan would resume in the same state), so skip them: linear.
+        val deadUntil = IntArray(QUOTES.length) { -1 }
+        var inTag = false
         var i = 0
         while (i < n) {
             val c = code[i]
@@ -100,6 +113,12 @@ object CodeHighlighter {
                     val end = code.indexOf("-->", i + 4).let { if (it < 0) n else it + 3 }
                     out.add(Token(i, end, TokenKind.COMMENT)); i = end
                 }
+                xml && c == '<' -> {
+                    val next = code.getOrNull(i + 1)
+                    inTag = next != null && (next.isLetter() || next == '/' || next == '?' || next == '!')
+                    i++
+                }
+                xml && c == '>' -> { inTag = false; i++ }
                 cLike && code.startsWith("//", i) -> {
                     val end = lineEnd(code, i)
                     out.add(Token(i, end, TokenKind.COMMENT)); i = end
@@ -112,22 +131,28 @@ object CodeHighlighter {
                     val end = lineEnd(code, i)
                     out.add(Token(i, end, TokenKind.COMMENT)); i = end
                 }
-                !xml && code.startsWith("\"\"\"", i) -> {
-                    val end = code.indexOf("\"\"\"", i + 3).let { if (it < 0) n else it + 3 }
-                    out.add(Token(i, end, TokenKind.STRING)); i = end
+                !xml && (code.startsWith("\"\"\"", i) || (hash && code.startsWith("'''", i))) -> {
+                    val close = code.indexOf(code.substring(i, i + 3), i + 3)
+                    if (close < 0) { i += 3 } else { out.add(Token(i, close + 3, TokenKind.STRING)); i = close + 3 }
                 }
-                c == '"' || (singleQuote && c == '\'') || (backtick && c == '`') -> {
+                (!xml || inTag) && (c == '"' || (singleQuote && c == '\'') || (backtick && c == '`')) &&
+                    i >= deadUntil[QUOTES.indexOf(c)] -> {
                     val multiline = xml || c == '`'
+                    val escapes = !xml && !(rawBacktick && c == '`')
+                    var closed = false
                     var j = i + 1
                     while (j < n) {
                         val d = code[j]
-                        if (d == '\\' && !xml) { j += 2; continue }
-                        if (d == c) { j++; break }
+                        if (d == '\\' && escapes) { j += 2; continue }
+                        if (d == c) { j++; closed = true; break }
                         if (d == '\n' && !multiline) break
                         j++
                     }
-                    val end = minOf(j, n)
-                    out.add(Token(i, end, TokenKind.STRING)); i = end
+                    if (closed) {
+                        out.add(Token(i, j, TokenKind.STRING)); i = j
+                    } else {
+                        deadUntil[QUOTES.indexOf(c)] = minOf(j, n); i++
+                    }
                 }
                 else -> i++
             }
@@ -172,7 +197,9 @@ object CodeHighlighter {
         }
 
         val hash = l in hashComment
-        scanLiterals(code, hash = hash, cLike = !hash, xml = false, singleQuote = true, backtick = l in setOf("js", "javascript", "ts", "typescript", "jsx", "tsx", "go", "bash", "sh", "shell", "zsh", "kotlin", "kt"))
+        scanLiterals(code, hash = hash, cLike = !hash, xml = false, singleQuote = true,
+            backtick = l in setOf("js", "javascript", "ts", "typescript", "jsx", "tsx", "go", "bash", "sh", "shell", "zsh", "kotlin", "kt"),
+            rawBacktick = l == "go")
             .forEach { add(it.start, it.end, it.kind) }
 
         if (!hash) annotationRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ANNOTATION) }

@@ -35,9 +35,12 @@ class ShellTool(
         val dir = workingDir().absolutePath
 
         val shizuku = useShizuku() && shizukuReady()
+        // Shizuku runs as the shell user, which cannot enter the app's private storage
+        // (the default workspace); start those commands in /data/local/tmp instead.
+        val shizukuDir = if (shizuku && isAppPrivate(dir)) SHELL_TMP else dir
         try {
             val proc: Process = if (shizuku) {
-                newShizukuProcess(cmd, null, dir)
+                newShizukuProcess(cmd, null, shizukuDir)
             } else {
                 ProcessBuilder(*cmd)
                     .directory(workingDir())
@@ -54,7 +57,11 @@ class ShellTool(
             val finished = waitFor(proc, timeout)
             if (!finished) proc.destroy()
             readers.forEach { it.join(2000) }
-            val label = if (shizuku) "[shizuku]" else "[sandbox]"
+            val label = when {
+                !shizuku -> "[sandbox]"
+                shizukuDir != dir -> "[shizuku cwd=$SHELL_TMP: el directorio de trabajo es privado de la app]"
+                else -> "[shizuku]"
+            }
             if (!finished) {
                 return@withContext ToolResult("$label timeout tras ${timeout}s\n$output", true)
             }
@@ -64,7 +71,9 @@ class ShellTool(
         } catch (c: kotlinx.coroutines.CancellationException) {
             throw c
         } catch (t: Throwable) {
-            ToolResult("Error ejecutando comando: ${t.message}", true)
+            // Reflection wraps whatever Shizuku threw; report the real cause.
+            val cause = (t as? java.lang.reflect.InvocationTargetException)?.targetException ?: t
+            ToolResult("Error ejecutando comando: ${cause.message ?: cause.javaClass.simpleName}", true)
         }
     }
 
@@ -87,18 +96,30 @@ class ShellTool(
         val deadline = System.currentTimeMillis() + timeoutSec * 1000L
         try {
             while (System.currentTimeMillis() < deadline) {
-                if (!proc.isAlive) return true
+                if (!alive(proc)) return true
                 kotlinx.coroutines.delay(50)
             }
-            return !proc.isAlive
+            return !alive(proc)
         } catch (c: kotlinx.coroutines.CancellationException) {
             proc.destroy()
             throw c
         }
     }
 
+    /**
+     * ShizukuRemoteProcess doesn't override isAlive; the inherited version calls
+     * exitValue(), whose "still running" error reaches us as an IllegalArgumentException
+     * across binder instead of the IllegalThreadStateException isAlive expects.
+     */
+    private fun alive(p: Process): Boolean =
+        if (p is rikka.shizuku.ShizukuRemoteProcess) p.alive() else p.isAlive
+
     companion object {
         private const val MAX_OUTPUT = 200_000
+        private const val SHELL_TMP = "/data/local/tmp"
+
+        internal fun isAppPrivate(path: String): Boolean =
+            path.startsWith("/data/user/") || path.startsWith("/data/data/") || path.startsWith("/data/user_de/")
 
         fun shizukuReady(): Boolean = try {
             Shizuku.pingBinder() &&

@@ -252,7 +252,14 @@ object MarkdownParser {
     /** Above this many '*'/'_' in one paragraph, emphasis is left as text (bounded cost). */
     private const val MAX_EMPHASIS_DELIMITERS = 400
 
-    fun parseInline(s: String): List<Inline> = parseInline(s, emphasis = s.count { it == '*' || it == '_' } <= MAX_EMPHASIS_DELIMITERS)
+    fun parseInline(s: String): List<Inline> {
+        if (s.count { it == '*' || it == '_' } <= MAX_EMPHASIS_DELIMITERS) return parseInline(s, emphasis = true)
+        // A long paragraph of "**Campo:** valor" lines: give each line its own budget.
+        if ('\n' in s) {
+            return s.split('\n').flatMapIndexed { k, line -> (if (k > 0) listOf(Inline.LineBreak) else emptyList()) + parseInline(line) }
+        }
+        return parseInline(s, emphasis = false)
+    }
 
     private fun parseInline(s: String, emphasis: Boolean): List<Inline> {
         val out = ArrayList<Inline>()
@@ -305,6 +312,10 @@ object MarkdownParser {
                     val close = findClose(s, i + 2, "~~")
                     if (close < 0) { buf.append("~~"); i += 2 }
                     else { flush(); out.add(Inline.Strike(parseInline(s.substring(i + 2, close)))); i = close + 2 }
+                }
+                emphasis && (c == '*' || c == '_') && i + 1 < n && s[i + 1] == c -> {
+                    // A "**"/"__" run that could not open bold above (e.g. "x ** 2") is plain text.
+                    val run = countRun(s, i, c); buf.append(s, i, i + run); i += run
                 }
                 emphasis && (c == '*' || c == '_') && canOpen(s, i, 1) && !(c == '_' && i > 0 && s[i - 1].isLetterOrDigit()) -> {
                     val close = findClose(s, i + 1, c.toString())
@@ -420,6 +431,14 @@ object MarkdownParser {
         var depth = 0
         var k = from
         while (k < to) {
+            // Escaped delimiters and code spans are text, as in findClose().
+            if (s[k] == '\\') { k += 2; continue }
+            if (s[k] == '`') {
+                val bt = countRun(s, k, '`')
+                val close = findBacktickClose(s, k + bt, bt)
+                k = if (close < 0) k + bt else close + bt
+                continue
+            }
             if (s[k] != ch) { k++; continue }
             val run = countRun(s, k, ch)
             if (run == 1 && s[k - 1] != ch) {

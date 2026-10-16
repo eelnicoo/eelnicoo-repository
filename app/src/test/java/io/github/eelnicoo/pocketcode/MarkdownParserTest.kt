@@ -226,4 +226,66 @@ class MarkdownParserTest {
         h.highlight("x = \"" + "\\\\n".repeat(30_000) + "\"", "python")
         h.highlight("{\"" + "k".repeat(100_000) + "\": 1}", "json")
     }
+
+    @Test fun spacedPowerOperatorDoesNotOpenItalic() {
+        val a = MarkdownParser.parseInline("En Python, x ** 2 es el cuadrado y **2 * 3** es 6; *ojo* con la precedencia, **siempre**.")
+        assertEquals(Inline.Text("En Python, x ** 2 es el cuadrado y "), a[0])
+        assertEquals(Inline.Bold(listOf(Inline.Text("2 * 3"))), a[1])
+        assertTrue(a.contains(Inline.Italic(listOf(Inline.Text("ojo")))))
+        assertTrue(a.contains(Inline.Bold(listOf(Inline.Text("siempre")))))
+        val b = MarkdownParser.parseInline("Calcula x ** 2 y luego *redondea*.")
+        assertTrue(b.contains(Inline.Italic(listOf(Inline.Text("redondea")))))
+    }
+
+    @Test fun codeSpansAndEscapesInsideBoldDoNotCloseTheItalic() {
+        val a = MarkdownParser.parseInline("*Recuerda: **`char* p` y `int* q`** declaran punteros* y **`*p`** los desreferencia.")
+        val it = a[0] as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Code("char* p"), Inline.Text(" y "), Inline.Code("int* q"))), it.children[1])
+        assertEquals(Inline.Bold(listOf(Inline.Code("*p"))), a[2])
+        val b = MarkdownParser.parseInline("*Nota: **5 \\* 3 \\* 2** es 30.* Ahora **súmale 2**.")
+        assertEquals(Inline.Italic(listOf(Inline.Text("Nota: "), Inline.Bold(listOf(Inline.Text("5 * 3 * 2"))), Inline.Text(" es 30."))), b[0])
+    }
+
+    @Test fun longParagraphKeepsEmphasisLineByLine() {
+        val md = (1..80).joinToString("\n") { "**`VAR_NAME_${'$'}it`** — URL de *conexión* para el servicio_${'$'}it." }
+        val inl = MarkdownParser.parseInline(md)
+        assertEquals(80, inl.count { it is Inline.Bold })
+        assertEquals(80, inl.count { it is Inline.Italic })
+        assertEquals(79, inl.count { it == Inline.LineBreak })
+    }
+
+    @Test fun highlighterKeepsUnclosedQuotesContained() {
+        val h = io.github.eelnicoo.pocketcode.markdown.CodeHighlighter
+        val kind = io.github.eelnicoo.pocketcode.markdown.TokenKind.STRING
+        fun strings(code: String, lang: String) = h.highlight(code, lang).filter { it.kind == kind }.map { code.substring(it.start, it.end) }
+
+        // Apostrophes in XML text content are not strings; tags after them still colour.
+        val xml = "<resources>\n  <string name=\"error\">Can't reach the server</string>\n  <string name=\"retry\">Retry</string>\n</resources>"
+        assertEquals(listOf("\"error\"", "\"retry\""), strings(xml, "xml"))
+        assertEquals(6, h.highlight(xml, "xml").count { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.TAG && xml[it.start] == '<' })
+        // A lone quote (a Rust lifetime) does not swallow the rest of the line.
+        assertEquals(listOf("\"pocket\""), strings("const NAME: &'static str = \"pocket\";", "rust"))
+        // Go raw strings have no escapes.
+        val go = "p := strings.ReplaceAll(`C:\\Users\\`, `\\`, `/`)\n// done\nvar x = 42"
+        assertEquals(listOf("`C:\\Users\\`", "`\\`", "`/`"), strings(go, "go"))
+        assertTrue(h.highlight(go, "go").any { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.COMMENT })
+        // Python docstrings with single quotes.
+        assertEquals(listOf("'''Doc don't'''"), strings("def f():\n    '''Doc don't'''\n    pass", "python"))
+    }
+
+    @Test fun highlighterStaysLinearOnUnclosedQuotes() {
+        val h = io.github.eelnicoo.pocketcode.markdown.CodeHighlighter
+        val inputs = listOf(
+            "'\\'".repeat(60_000),
+            "x = \"\\\"".repeat(40_000),
+            "`\\`".repeat(40_000) + "`",
+            "<a b='" + "\\'".repeat(60_000),
+        )
+        for ((k, t) in inputs.withIndex()) {
+            val start = System.nanoTime()
+            h.highlight(t, if (k == 3) "xml" else "js")
+            val ms = (System.nanoTime() - start) / 1_000_000
+            assertTrue("took ${'$'}ms ms for input ${'$'}k", ms < 1500)
+        }
+    }
 }

@@ -533,6 +533,10 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 keepPartial()
                 error = e
+            } catch (e: OutOfMemoryError) {
+                // Serialising a chat full of large attachments can exhaust the heap.
+                keepPartial()
+                error = Exception("No hay memoria suficiente para enviar este chat. Quita adjuntos grandes o empieza uno nuevo.")
             } finally {
                 withContext(NonCancellable) {
                     current = History.repair(current, "Interrumpido.")
@@ -645,7 +649,9 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     private fun buildContext(): String = buildString {
         append("Dispositivo: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}).\n")
         append(workdirLine())
-        append("La salida de run_shell indica [shizuku] (permisos de depuración) o [sandbox] (solo la app).\n")
+        append("La salida de run_shell indica [shizuku] (permisos de depuración) o [sandbox] (solo la app). ")
+        append("Con Shizuku no se puede entrar en el almacenamiento privado de la app: si el directorio de trabajo está ahí, ")
+        append("el comando se ejecuta en /data/local/tmp (usa read_file/write_file para los archivos del directorio de trabajo).\n")
         append("Fecha de inicio de la conversación: ${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}.")
         val name = settings.displayName.trim()
         if (name.isNotEmpty()) append("\nEl usuario se llama $name.")
@@ -803,9 +809,13 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
     companion object {
         private const val RESUME_WINDOW_MS = 30 * 60 * 1000L
         private const val MAX_IMAGE_SIDE = 1568
-        private const val MAX_FILE_BYTES = 15_000_000
+        private const val MAX_FILE_BYTES = 8_000_000
         private const val MAX_TEXT_CHARS = 300_000
-        /** Total characters of base64/text payload allowed in one request (~22 MB). */
-        private const val MAX_REQUEST_PAYLOAD = 30_000_000
+        /**
+         * Total characters of base64/text payload allowed in one request (~9 MB of files).
+         * Each request holds the history several times over (JSON tree, string, body), so
+         * this stays well below the app's heap.
+         */
+        private const val MAX_REQUEST_PAYLOAD = 12_000_000
     }
 }

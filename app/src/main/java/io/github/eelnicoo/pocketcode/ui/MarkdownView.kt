@@ -25,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +39,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -87,19 +90,29 @@ fun MarkdownView(
             with(density) { measurer.measure("$it.", base, softWrap = false, maxLines = 1).size.width.toDp() } + 8.dp
         }?.coerceAtLeast(24.dp) ?: 24.dp
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        var i = 0
-        while (i < blocks.size) {
-            val b = blocks[i]
-            if (b is MdBlock.ListItem) {
-                // Consecutive list items render as one tight group.
-                val group = ArrayList<MdBlock.ListItem>()
-                while (i < blocks.size && blocks[i] is MdBlock.ListItem) { group.add(blocks[i] as MdBlock.ListItem); i++ }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { group.forEach { ListItemView(it, base, markerWidth) } }
-                continue
+    // A link Claude wrote may have no app to open it (an unknown scheme) or be one Android
+    // refuses to hand out (file://); the default handler throws, which would close the app.
+    val uriHandler = LocalUriHandler.current
+    val safeUris = remember(uriHandler) {
+        object : UriHandler {
+            override fun openUri(uri: String) { runCatching { uriHandler.openUri(uri) } }
+        }
+    }
+    CompositionLocalProvider(LocalUriHandler provides safeUris) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            var i = 0
+            while (i < blocks.size) {
+                val b = blocks[i]
+                if (b is MdBlock.ListItem) {
+                    // Consecutive list items render as one tight group.
+                    val group = ArrayList<MdBlock.ListItem>()
+                    while (i < blocks.size && blocks[i] is MdBlock.ListItem) { group.add(blocks[i] as MdBlock.ListItem); i++ }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { group.forEach { ListItemView(it, base, markerWidth) } }
+                    continue
+                }
+                BlockView(b, base, streaming && i == blocks.lastIndex)
+                i++
             }
-            BlockView(b, base, streaming && i == blocks.lastIndex)
-            i++
         }
     }
 }
