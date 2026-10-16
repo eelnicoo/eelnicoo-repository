@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -35,6 +36,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +44,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -66,13 +71,24 @@ fun Composer(
     modelName: String,
     onModelClick: () -> Unit,
     onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
     onPickFile: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    focusTick: Int,
     modifier: Modifier = Modifier,
 ) {
     val c = LocalClaude.current
     val shape = RoundedCornerShape(24.dp)
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Editing a message or picking a suggestion moves the cursor here, like the Claude app.
+    LaunchedEffect(focusTick) {
+        if (focusTick > 0 && loggedIn) {
+            runCatching { focusRequester.requestFocus() }
+            keyboard?.show()
+        }
+    }
     Column(modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) {
         if (editing) {
             Row(
@@ -115,6 +131,7 @@ fun Composer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
+                    .focusRequester(focusRequester)
                     .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 4.dp),
                 decorationBox = { inner ->
                     Box {
@@ -132,7 +149,7 @@ fun Composer(
                 Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AttachButton(enabled = loggedIn && !busy, onPickImage = onPickImage, onPickFile = onPickFile)
+                AttachButton(enabled = loggedIn && !busy, onPickImage = onPickImage, onTakePhoto = onTakePhoto, onPickFile = onPickFile)
                 Spacer(Modifier.weight(1f))
                 Row(
                     Modifier
@@ -154,7 +171,7 @@ fun Composer(
 }
 
 @Composable
-private fun AttachButton(enabled: Boolean, onPickImage: () -> Unit, onPickFile: () -> Unit) {
+private fun AttachButton(enabled: Boolean, onPickImage: () -> Unit, onTakePhoto: () -> Unit, onPickFile: () -> Unit) {
     val c = LocalClaude.current
     var menu by remember { mutableStateOf(false) }
     Box {
@@ -173,6 +190,11 @@ private fun AttachButton(enabled: Boolean, onPickImage: () -> Unit, onPickFile: 
                 text = { Text("Fotos") },
                 leadingIcon = { Icon(Icons.Outlined.Image, null) },
                 onClick = { menu = false; onPickImage() },
+            )
+            DropdownMenuItem(
+                text = { Text("Cámara") },
+                leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null) },
+                onClick = { menu = false; onTakePhoto() },
             )
             DropdownMenuItem(
                 text = { Text("Archivo (texto o PDF)") },

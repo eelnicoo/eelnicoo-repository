@@ -13,6 +13,8 @@ class ApiException(
     val status: Int?,
     val errorType: String?,
     message: String,
+    /** The server's own error message (without our friendly prefix). */
+    val rawMessage: String = message,
 ) : Exception(message) {
     val retryable: Boolean
         get() = status in RETRYABLE_STATUS || errorType == "overloaded_error" || errorType == "api_error"

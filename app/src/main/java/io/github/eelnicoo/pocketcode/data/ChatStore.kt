@@ -24,6 +24,11 @@ data class ChatMeta(
 data class ChatFile(
     val meta: ChatMeta,
     val messages: List<JsonObject>,
+    /**
+     * System context frozen when the chat was created. It must not change between
+     * requests: thinking blocks are bound to the exact prefix they were produced with.
+     */
+    val context: String? = null,
 )
 
 /**
@@ -70,7 +75,11 @@ class ChatStore(private val dir: File) {
 
     private fun atomicWrite(target: File, text: String) {
         val tmp = File(target.parentFile, target.name + ".tmp")
-        tmp.writeText(text)
+        // fsync before the rename so a power loss cannot leave an empty file behind.
+        java.io.FileOutputStream(tmp).use { out ->
+            out.write(text.toByteArray(Charsets.UTF_8))
+            out.fd.sync()
+        }
         if (!tmp.renameTo(target)) {
             target.delete()
             if (!tmp.renameTo(target)) {

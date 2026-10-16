@@ -82,8 +82,12 @@ object CodeHighlighter {
     private val attrRe = Regex("\\b[A-Za-z_:][A-Za-z0-9_:.-]*(?==)")
     private val jsonKeyRe = Regex("\"(?:\\\\.|[^\"\\\\])*\"(?=\\s*:)")
 
+    private val MARKUP = setOf("xml", "html", "svg", "manifest", "json", "jsonc")
+
     fun highlight(code: String, lang: String): List<Token> {
         val l = lang.lowercase().trim()
+        // Unlabelled or unknown blocks (command output, logs, prose) stay plain.
+        if (l !in KEYWORDS && l !in MARKUP && l !in hashComment) return emptyList()
         val tokens = ArrayList<Token>()
         val taken = BooleanArray(code.length)
 
@@ -112,7 +116,7 @@ object CodeHighlighter {
         }
 
         // Comments first so strings/keywords inside them are not highlighted.
-        val commentRe = if (l in hashComment) Regex("#[^\\n]*") else Regex("//[^\\n]*|/\\*[\\s\\S]*?\\*/")
+        val commentRe = if (l in hashComment) Regex("(?<![^\\s])#[^\\n]*") else Regex("//[^\\n]*|/\\*[\\s\\S]*?\\*/")
         // Strings take priority over comment markers inside them, so resolve by position.
         val events = (commentRe.findAll(code).map { it to TokenKind.COMMENT } + stringRe.findAll(code).map { it to TokenKind.STRING })
             .sortedBy { it.first.range.first }
@@ -121,7 +125,7 @@ object CodeHighlighter {
         if (l !in hashComment) annotationRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ANNOTATION) }
         numberRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.NUMBER) }
 
-        val keywords = KEYWORDS[l] ?: (KEYWORDS["kotlin"].orEmpty() + KEYWORDS["python"].orEmpty() + KEYWORDS["js"].orEmpty())
+        val keywords = KEYWORDS[l].orEmpty()
         val caseInsensitive = l == "sql"
         wordRe.findAll(code).forEach { m ->
             val w = m.value

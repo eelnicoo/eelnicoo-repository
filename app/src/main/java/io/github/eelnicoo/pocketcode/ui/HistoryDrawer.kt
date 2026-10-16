@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import java.util.Calendar
 
 @Composable
 fun HistoryDrawer(
+    open: Boolean,
     chats: List<ChatMeta>,
     currentId: String?,
     displayName: String,
@@ -73,6 +75,8 @@ fun HistoryDrawer(
     var query by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<ChatMeta?>(null) }
     var deleting by remember { mutableStateOf<ChatMeta?>(null) }
+    // Each time the drawer opens, start from the full list.
+    LaunchedEffect(open) { if (!open) query = "" }
 
     val filtered = remember(chats, query) {
         val q = query.trim()

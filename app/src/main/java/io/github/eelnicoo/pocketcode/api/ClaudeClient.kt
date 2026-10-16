@@ -5,7 +5,9 @@ import io.github.eelnicoo.pocketcode.oauth.ClaudeOAuth
 import io.github.eelnicoo.pocketcode.tools.ToolRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -50,8 +52,10 @@ class ClaudeClient(
         /** A message was appended to the history. */
         fun onAppend(message: JsonObject)
         fun onToolRunning(id: String, running: Boolean)
-        /** A non-fatal note to show the user (e.g. a refusal). */
+        /** A non-fatal note to show the user. */
         fun onNotice(text: String)
+        /** Claude declined the last human turn (stop_reason "refusal"). */
+        fun onRefusal() {}
     }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
@@ -67,6 +71,7 @@ class ClaudeClient(
     @Volatile private var useCache = true
     @Volatile private var useThinkingParam = true
     @Volatile private var useEffort = true
+    @Volatile private var useBlockBinding = true
 
     /**
      * Runs one agentic turn on top of [history] (which must end with a user message).
@@ -81,9 +86,8 @@ class ClaudeClient(
 
             if (asm.stopReason == "refusal") {
                 // Discard the partial reply; the user can rephrase or switch model.
-                listener.onNotice(
-                    "Claude no ha podido responder a esta petición. Prueba a reformularla o cambia de modelo."
-                )
+                listener.onNotice("Claude no ha podido responder a esto. Edita tu mensaje o cambia de modelo.")
+                listener.onRefusal()
                 return h
             }
 
@@ -93,6 +97,7 @@ class ClaudeClient(
                 return h
             }
             val assistant = History.message("assistant", content)
+            currentCoroutineContext().ensureActive()
             h = h + assistant
             listener.onAppend(assistant)
 
@@ -108,6 +113,8 @@ class ClaudeClient(
                 }
                 toolUses.isNotEmpty() -> {
                     val results = toolUses.map { executeTool(it, asm, listener) }
+                    // A stopped run must not report results into whatever chat is now open.
+                    currentCoroutineContext().ensureActive()
                     val user = History.message("user", results)
                     h = h + user
                     listener.onAppend(user)
@@ -146,25 +153,40 @@ class ClaudeClient(
     private suspend fun streamWithRetry(h: List<JsonObject>, cfg: Config, listener: Listener): StreamAssembler {
         var attempt = 0
         var refreshed = false
+        var history = h
+        var strippedThinking = false
         while (true) {
             val asm = StreamAssembler()
             try {
-                streamOnce(h, cfg, asm, listener)
+                streamOnce(history, cfg, asm, listener)
                 return asm
             } catch (e: ApiException) {
                 listener.onDraft(null)
                 if (asm.sawContent) throw e
-                val msg = (e.message ?: "").lowercase()
+                val raw = e.rawMessage.lowercase()
+                // Errors about the history ("messages.3.content.0: ...") never mean that a
+                // request parameter is unsupported, so they must not switch features off.
+                val aboutParams = !raw.startsWith("messages")
                 when {
                     e.status == 401 && !refreshed -> {
                         refreshed = true
                         oauth.refresh().getOrElse { throw ApiException(401, null, "Sesión caducada. Vuelve a iniciar sesión en Ajustes.") }
                         continue
                     }
-                    e.status == 400 && useFallbacks && "fallback" in msg -> { useFallbacks = false; continue }
-                    e.status == 400 && useCache && "cache_control" in msg -> { useCache = false; continue }
-                    e.status == 400 && useThinkingParam && ("thinking" in msg || "display" in msg) -> { useThinkingParam = false; continue }
-                    e.status == 400 && useEffort && ("effort" in msg || "output_config" in msg) -> { useEffort = false; continue }
+                    e.status == 400 && useBlockBinding && ("block_binding" in raw || "thinking-binding" in raw) -> { useBlockBinding = false; continue }
+                    e.status == 400 && aboutParams && useFallbacks && "fallbacks" in raw -> { useFallbacks = false; continue }
+                    e.status == 400 && aboutParams && useCache && "cache_control" in raw -> { useCache = false; continue }
+                    e.status == 400 && aboutParams && useEffort && ("output_config" in raw || "effort" in raw) -> { useEffort = false; continue }
+                    e.status == 400 && aboutParams && useThinkingParam && ("thinking.display" in raw || "thinking.type" in raw || raw.startsWith("thinking")) -> {
+                        useThinkingParam = false; continue
+                    }
+                    e.status == 400 && !strippedThinking && ("signature" in raw || ("thinking" in raw && !aboutParams)) -> {
+                        // A replayed thinking block was rejected (e.g. bound to another model or
+                        // prefix). Resend this request once without earlier thinking blocks.
+                        strippedThinking = true
+                        history = History.withoutThinking(history)
+                        continue
+                    }
                     e.retryable && attempt < MAX_RETRIES -> {
                         attempt++
                         delay(1500L shl (attempt - 1))
@@ -191,6 +213,7 @@ class ClaudeClient(
         val betas = buildList {
             add(OAUTH_BETA)
             if (fallbacks) add(FALLBACK_BETA)
+            if (useThinkingParam && useBlockBinding) add(BLOCK_BINDING_BETA)
         }.joinToString(",")
         val req = Request.Builder()
             .url("$API_BASE/v1/messages")
@@ -241,7 +264,7 @@ class ClaudeClient(
             val err = runCatching { (json.parseToJsonElement(raw).jsonObject["error"] as? JsonObject) }.getOrNull()
             val type = (err?.get("type") as? JsonPrimitive)?.contentOrNull
             val message = (err?.get("message") as? JsonPrimitive)?.contentOrNull ?: raw.take(300)
-            return ApiException(response.code, type, friendly(response.code, message))
+            return ApiException(response.code, type, friendly(response.code, message), rawMessage = message)
         }
         return t as? java.io.IOException ?: java.io.IOException(t?.message ?: "fallo de red", t)
     }
@@ -269,6 +292,10 @@ class ClaudeClient(
             put("thinking", buildJsonObject {
                 put("type", "adaptive")
                 put("display", "summarized")
+                if (useBlockBinding) {
+                    // Drop (instead of rejecting) thinking blocks whose prefix no longer matches.
+                    put("block_binding", buildJsonObject { put("prefix_mismatch_behavior", "drop_block") })
+                }
             })
         }
         if (useEffort && cfg.effort != null) {
@@ -321,6 +348,7 @@ class ClaudeClient(
         const val API_BASE = "https://api.anthropic.com"
         const val OAUTH_BETA = "oauth-2025-04-20"
         const val FALLBACK_BETA = "server-side-fallback-2026-07-01"
+        const val BLOCK_BINDING_BETA = "thinking-binding-controls-2026-08-01"
         const val TITLE_MODEL = "claude-haiku-5-5"
         const val MAX_ITERATIONS = 60
         const val MAX_RETRIES = 3

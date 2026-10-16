@@ -30,6 +30,8 @@ data class AssistantRow(
     val streaming: Boolean,
     val isLast: Boolean,
     val copyText: String,
+    /** The turn ended without a final answer (stopped, error, refusal): offer retry. */
+    val incomplete: Boolean = false,
 ) : ChatRow
 
 sealed interface Part { val key: String }
@@ -53,30 +55,43 @@ data class ToolPart(
     val server: Boolean,
 ) : Part
 
+/** Tool outputs found in the history, keyed by tool_use id. Build once per history. */
+class ResultIndex internal constructor(
+    internal val results: Map<String, ChatRows.Outcome>,
+    internal val server: Map<String, JsonObject>,
+)
+
 object ChatRows {
 
-    private data class Result(val text: String, val isError: Boolean)
+    data class Outcome(val text: String, val isError: Boolean)
+
+    /** Pre-computes tool results; cache it per history so streaming ticks stay cheap. */
+    fun index(messages: List<JsonObject>): ResultIndex {
+        val results = HashMap<String, Outcome>()
+        val server = HashMap<String, JsonObject>()
+        for (m in messages) for (b in History.blocks(m)) {
+            val t = History.type(b)
+            if (t == "tool_result") {
+                val id = History.str(b, "tool_use_id") ?: continue
+                results[id] = Outcome(History.toolResultText(b), (b["is_error"] as? JsonPrimitive)?.contentOrNull == "true")
+            } else if (t.endsWith("_tool_result")) {
+                History.str(b, "tool_use_id")?.let { server[it] = b }
+            }
+        }
+        return ResultIndex(results, server)
+    }
 
     fun build(
         messages: List<JsonObject>,
         draft: List<JsonObject>?,
         running: Set<String>,
         busy: Boolean,
+        index: ResultIndex = index(messages),
     ): List<ChatRow> {
-        val results = HashMap<String, Result>()
-        val serverResults = HashMap<String, JsonObject>()
-        for (m in messages) for (b in History.blocks(m)) {
-            val t = History.type(b)
-            if (t == "tool_result") {
-                val id = History.str(b, "tool_use_id") ?: continue
-                results[id] = Result(History.toolResultText(b), (b["is_error"] as? JsonPrimitive)?.contentOrNull == "true")
-            } else if (t.endsWith("_tool_result")) {
-                History.str(b, "tool_use_id")?.let { serverResults[it] = b }
-            }
-        }
-        draft?.forEach { b ->
-            if (History.type(b).endsWith("_tool_result")) History.str(b, "tool_use_id")?.let { serverResults[it] = b }
-        }
+        val results = index.results
+        val draftServer = draft.orEmpty().filter { History.type(it).endsWith("_tool_result") }
+        val serverResults: Map<String, JsonObject> = if (draftServer.isEmpty()) index.server else
+            index.server + draftServer.mapNotNull { b -> History.str(b, "tool_use_id")?.let { it to b } }
 
         val rows = ArrayList<ChatRow>()
         var parts: MutableList<Part>? = null
@@ -111,15 +126,18 @@ object ChatRows {
                     ?.let { target.add(it) }
             }
         }
-        val endsWithHuman = messages.lastOrNull()?.let { History.isHumanTurn(it) } == true
-        if (busy && parts == null && endsWithHuman) parts = mutableListOf()
+        val last = messages.lastOrNull()
+        val endsWithHuman = last?.let { History.isHumanTurn(it) } == true
+        val endsWithUser = last?.let { History.role(it) == "user" } == true
+        // While running, or after a turn that never got its answer, keep a row for it.
+        if (parts == null && endsWithHuman) parts = mutableListOf()
         closeTurn()
 
         // Mark the final answer as last (and streaming while the agent runs).
         val lastIdx = rows.indexOfLast { it is AssistantRow }
         if (lastIdx >= 0 && lastIdx == rows.lastIndex) {
             val r = rows[lastIdx] as AssistantRow
-            rows[lastIdx] = r.copy(streaming = busy, isLast = true)
+            rows[lastIdx] = r.copy(streaming = busy, isLast = true, incomplete = !busy && endsWithUser)
         }
         return rows.map { row ->
             if (row is AssistantRow) row.copy(copyText = row.parts.filterIsInstance<TextPart>().joinToString("\n\n") { it.text }.trim())
@@ -153,7 +171,7 @@ object ChatRows {
     private fun partFor(
         key: String,
         b: JsonObject,
-        results: Map<String, Result>,
+        results: Map<String, Outcome>,
         serverResults: Map<String, JsonObject>,
         running: Set<String>,
         busy: Boolean,

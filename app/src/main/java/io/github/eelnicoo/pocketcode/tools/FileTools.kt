@@ -1,5 +1,8 @@
 package io.github.eelnicoo.pocketcode.tools
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -114,6 +117,7 @@ class ListDirTool(private val ws: Workspace) : Tool {
 }
 
 class GrepTool(private val ws: Workspace) : Tool {
+    private companion object { const val MAX_HITS = 200 }
     override val name = "grep"
     override val description = "Busca un patrón (regex) en archivos de un directorio, recursivamente."
     override val inputSchema = objectSchema(
@@ -125,15 +129,19 @@ class GrepTool(private val ws: Workspace) : Tool {
         val path = input["path"]?.jsonPrimitive?.content ?: "."
         val root = ws.resolve(path)
         val regex = runCatching { Regex(pattern) }.getOrElse { return ToolResult("Regex inválida: ${it.message}", true) }
-        val hits = StringBuilder()
-        var count = 0
-        root.walkTopDown()
-            .filter { it.isFile && it.length() < 2_000_000 }
-            .forEach { file ->
+        return withContext(Dispatchers.IO) {
+            val hits = StringBuilder()
+            var count = 0
+            for (file in root.walkTopDown()) {
+                // Cooperate with Stop, and stop walking once enough matches were found.
+                ensureActive()
+                if (count >= MAX_HITS) break
+                if (!file.isFile || file.length() >= 2_000_000) continue
                 runCatching {
                     file.useLines { lines ->
-                        lines.forEachIndexed { i, line ->
-                            if (count < 200 && regex.containsMatchIn(line)) {
+                        for ((i, line) in lines.withIndex()) {
+                            if (count >= MAX_HITS) break
+                            if (regex.containsMatchIn(line)) {
                                 hits.append("${file.path}:${i + 1}: ${line.trim().take(200)}\n")
                                 count++
                             }
@@ -141,6 +149,11 @@ class GrepTool(private val ws: Workspace) : Tool {
                     }
                 }
             }
-        return if (count == 0) ToolResult("Sin coincidencias") else ToolResult(hits.toString())
+            when {
+                count == 0 -> ToolResult("Sin coincidencias")
+                count >= MAX_HITS -> ToolResult(hits.toString() + "…[limitado a $MAX_HITS coincidencias]")
+                else -> ToolResult(hits.toString())
+            }
+        }
     }
 }

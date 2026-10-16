@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -102,7 +105,7 @@ private fun BlockView(b: MdBlock, base: TextStyle) {
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        is MdBlock.CodeBlock -> CodeBlockView(b.lang, b.code)
+        is MdBlock.CodeBlock -> CodeBlockView(b.lang, b.code, colorize = b.closed)
         is MdBlock.Quote -> {
             val bar = c.border
             Column(
@@ -125,7 +128,7 @@ private fun BlockView(b: MdBlock, base: TextStyle) {
 private fun ListItemView(item: MdBlock.ListItem, base: TextStyle) {
     val c = LocalClaude.current
     Row(Modifier.padding(start = (item.level * 18).dp)) {
-        Box(Modifier.width(24.dp), contentAlignment = Alignment.TopStart) {
+        Box(Modifier.widthIn(min = 24.dp).padding(end = 4.dp), contentAlignment = Alignment.TopStart) {
             when {
                 item.task != null -> Icon(
                     if (item.task) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
@@ -133,7 +136,7 @@ private fun ListItemView(item: MdBlock.ListItem, base: TextStyle) {
                     tint = if (item.task) c.accent else c.textTertiary,
                     modifier = Modifier.padding(top = 3.dp).size(18.dp),
                 )
-                item.ordered -> Text("${item.number}.", style = base.copy(color = c.textSecondary))
+                item.ordered -> Text("${item.number}.", style = base.copy(color = c.textSecondary), softWrap = false, maxLines = 1)
                 else -> Text(if (item.level == 0) "•" else "◦", style = base.copy(color = c.textSecondary))
             }
         }
@@ -144,12 +147,21 @@ private fun ListItemView(item: MdBlock.ListItem, base: TextStyle) {
 @Composable
 private fun TableView(t: MdBlock.Table, base: TextStyle) {
     val c = LocalClaude.current
-    // Column widths estimated from the longest cell text, clamped to a sane range.
-    val widths = remember(t) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val cellStyle = base.copy(fontSize = 14.sp, lineHeight = 20.sp)
+    val headerStyle = cellStyle.copy(fontWeight = FontWeight.SemiBold)
+    val codeSpan = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+    // Column widths from the real measured width of the widest cell (no wrapping),
+    // plus the cell padding, clamped to a sane range.
+    val widths = remember(t, cellStyle, density) {
+        fun measure(cell: List<Inline>, style: TextStyle): Int {
+            val text = buildAnnotatedString { appendInlines(cell, codeSpan, TextLinkStyles()) }
+            return measurer.measure(text, style = style, softWrap = false, maxLines = 1).size.width
+        }
         List(t.header.size) { col ->
-            val longest = (listOf(t.header[col]) + t.rows.map { it[col] })
-                .maxOf { MarkdownParser.plain(it).lines().maxOfOrNull { l -> l.length } ?: 0 }
-            (longest * 8 + 24).coerceIn(72, 280)
+            val px = maxOf(measure(t.header[col], headerStyle), t.rows.maxOfOrNull { measure(it[col], cellStyle) } ?: 0)
+            with(density) { (px.toDp().value + 24f).toInt() }.coerceIn(72, 280)
         }
     }
     val shape = RoundedCornerShape(10.dp)
@@ -190,12 +202,13 @@ private fun TableRow(cells: List<List<Inline>>, widths: List<Int>, aligns: List<
 }
 
 @Composable
-fun CodeBlockView(lang: String, code: String) {
+fun CodeBlockView(lang: String, code: String, colorize: Boolean = true) {
     val c = LocalClaude.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
-    val highlighted = remember(code, lang, c) { highlight(code, lang, c) }
+    // While the block is still streaming it is shown plain; it is coloured once closed.
+    val highlighted = remember(code, lang, c, colorize) { if (colorize) highlight(code, lang, c) else AnnotatedString(code) }
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier

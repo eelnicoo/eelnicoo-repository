@@ -61,4 +61,15 @@ class ChatRowsTest {
         assertEquals(ToolState.INTERRUPTED, (a.parts[2] as ToolPart).state)
         assertTrue(a.parts[1] is TextPart)
     }
+
+    @Test fun turnWithoutAnswerOffersRetry() {
+        val h = history + j("""{"role":"user","content":[{"type":"text","text":"otra"}]}""")
+        val last = ChatRows.build(h, null, emptySet(), busy = false).last() as AssistantRow
+        assertTrue(last.incomplete)
+        assertTrue(last.parts.isEmpty())
+        val afterTools = ChatRows.build(history.take(3), null, emptySet(), busy = false).last() as AssistantRow
+        assertTrue(afterTools.incomplete)
+        val done = ChatRows.build(history, null, emptySet(), busy = false).last() as AssistantRow
+        assertFalse(done.incomplete)
+    }
 }

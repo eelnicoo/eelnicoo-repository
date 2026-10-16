@@ -1,5 +1,6 @@
 package io.github.eelnicoo.pocketcode.ui
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -27,6 +28,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -63,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,6 +75,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +84,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.eelnicoo.pocketcode.api.History
 import io.github.eelnicoo.pocketcode.chat.AssistantRow
@@ -85,6 +92,7 @@ import io.github.eelnicoo.pocketcode.chat.ChatRows
 import io.github.eelnicoo.pocketcode.chat.UserRow
 import io.github.eelnicoo.pocketcode.data.Settings
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Calendar
 
 @Composable
@@ -104,13 +112,24 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.addFile(it) }
     }
+    val context = LocalContext.current
+    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = photoUri
+        if (ok && uri != null) vm.addImage(uri)
+    }
 
-    val rows = remember(state.messages, state.draft, state.runningTools, state.busy) {
-        ChatRows.build(state.messages, state.draft, state.runningTools, state.busy)
+    // Tool results are indexed once per history, so 50 ms streaming ticks stay cheap.
+    val resultIndex = remember(state.messages) { ChatRows.index(state.messages) }
+    val rows = remember(state.messages, state.draft, state.runningTools, state.busy, resultIndex) {
+        ChatRows.build(state.messages, state.draft, state.runningTools, state.busy, resultIndex)
     }
 
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
     BackHandler(enabled = !drawer.isOpen && state.editingIndex != null) { vm.cancelEdit() }
+
+    // Closing the drawer must not leave the keyboard typing into its hidden search box.
+    LaunchedEffect(drawer.isClosed) { if (drawer.isClosed) focus.clearFocus() }
 
     // Jump to the newest message whenever a new row appears.
     LaunchedEffect(rows.size, state.chatId) {
@@ -123,9 +142,10 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
             ModalDrawerSheet(
                 drawerContainerColor = c.drawer,
                 drawerShape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),
-                windowInsets = WindowInsets.systemBars,
+                windowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
             ) {
                 HistoryDrawer(
+                    open = drawer.isOpen,
                     chats = state.chats,
                     currentId = state.chatId,
                     displayName = settings.displayName,
@@ -164,7 +184,7 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                     Greeting(
                         name = settings.displayName,
                         loggedIn = settings.loggedIn,
-                        onSuggestion = { vm.setComposerText(it) },
+                        onSuggestion = { vm.applySuggestion(it) },
                         onOpenSettings = onOpenSettings,
                     )
                 } else {
@@ -178,7 +198,24 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                         items(rows.asReversed(), key = { it.key }) { row ->
                             when (row) {
                                 is UserRow -> UserMessage(row, canEdit = !state.busy) { vm.startEdit(it) }
-                                is AssistantRow -> AssistantTurn(row, onRetry = { vm.retry() })
+                                is AssistantRow -> {
+                                    // While reading higher up in a streaming answer, compensate its growth
+                                    // so the text under the finger does not keep sliding away.
+                                    var lastHeight by remember { mutableIntStateOf(0) }
+                                    Box(
+                                        Modifier.onSizeChanged { size ->
+                                            val delta = size.height - lastHeight
+                                            if (row.streaming && lastHeight > 0 && delta > 0 &&
+                                                listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 0
+                                            ) {
+                                                listState.requestScrollToItem(0, listState.firstVisibleItemScrollOffset + delta)
+                                            }
+                                            lastHeight = size.height
+                                        },
+                                    ) {
+                                        AssistantTurn(row, onRetry = { vm.retry() })
+                                    }
+                                }
                             }
                         }
                     }
@@ -189,15 +226,16 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
                     )
                 }
-                state.notice?.let { notice ->
-                    NoticeBar(
-                        text = notice,
-                        canRetry = !state.busy && state.messages.lastOrNull()?.let { History.isHumanTurn(it) } == true,
-                        onRetry = { vm.retry() },
-                        onDismiss = { vm.dismissNotice() },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
+            }
+
+            // Takes layout space (instead of floating over the list) so it never hides the answer.
+            state.notice?.let { notice ->
+                NoticeBar(
+                    text = notice,
+                    canRetry = !state.busy && state.editingIndex == null && History.lastHumanIndex(state.messages) >= 0,
+                    onRetry = { vm.retry() },
+                    onDismiss = { vm.dismissNotice() },
+                )
             }
 
             Composer(
@@ -213,9 +251,19 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                 modelName = Settings.modelInfo(settings.model).name,
                 onModelClick = { focus.clearFocus(); showModels = true },
                 onPickImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onTakePhoto = {
+                    runCatching {
+                        val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                        val file = File(dir, "foto-${System.currentTimeMillis()}.jpg")
+                        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+                        photoUri = uri
+                        takePhoto.launch(uri)
+                    }.onFailure { vm.showNotice("No se pudo abrir la cámara.") }
+                },
                 onPickFile = { pickFile.launch(arrayOf("text/*", "application/pdf", "application/json", "application/xml", "image/*", "*/*")) },
                 onSend = { vm.send(); scope.launch { if (rows.isNotEmpty()) listState.scrollToItem(0) } },
                 onStop = vm::stop,
+                focusTick = state.focusTick,
             )
         }
     }

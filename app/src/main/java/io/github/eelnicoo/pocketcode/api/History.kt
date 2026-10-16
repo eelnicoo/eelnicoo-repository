@@ -117,6 +117,13 @@ object History {
         }
     }
 
+    /** A copy of the history without thinking / redacted_thinking blocks (recovery only). */
+    fun withoutThinking(history: List<JsonObject>): List<JsonObject> = history.map { m ->
+        if (role(m) != "assistant") return@map m
+        val kept = blocks(m).filter { type(it) != "thinking" && type(it) != "redacted_thinking" }
+        if (kept.isEmpty()) message("assistant", listOf(textBlock("…"))) else message("assistant", kept)
+    }
+
     /** First text the person typed in this conversation (for titles). */
     fun firstUserText(history: List<JsonObject>): String =
         history.firstOrNull { isHumanTurn(it) }?.let { m ->

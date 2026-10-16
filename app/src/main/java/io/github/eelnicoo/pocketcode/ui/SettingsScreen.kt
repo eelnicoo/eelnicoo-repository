@@ -59,6 +59,8 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
 
     var code by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var workdirStatus by remember { mutableStateOf("") }
+    var shizukuStatus by remember { mutableStateOf("") }
     var name by remember { mutableStateOf(state.displayName) }
     var workdir by remember { mutableStateOf(state.workingDir) }
 
@@ -155,7 +157,8 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                     textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
                 )
                 Spacer(Modifier.height(10.dp))
-                PillButton("Guardar", outlined = true) { vm.settings.workingDir = workdir.trim(); status = "Directorio guardado" }
+                PillButton("Guardar", outlined = true) { vm.settings.workingDir = workdir.trim(); workdirStatus = "Directorio guardado" }
+                StatusLine(workdirStatus)
             }
 
             Section("Shizuku") {
@@ -174,7 +177,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 PillButton("Comprobar / pedir permiso", outlined = true) {
-                    status = runCatching {
+                    shizukuStatus = runCatching {
                         if (ShellTool.shizukuReady()) "Shizuku listo y con permiso"
                         else {
                             runCatching { rikka.shizuku.Shizuku.requestPermission(1001) }
@@ -182,6 +185,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                         }
                     }.getOrElse { "Shizuku no disponible: ${it.message}" }
                 }
+                StatusLine(shizukuStatus)
             }
 
             Text(
@@ -207,6 +211,13 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
             content = content,
         )
     }
+}
+
+@Composable
+private fun StatusLine(text: String) {
+    if (text.isBlank()) return
+    val c = LocalClaude.current
+    Text(text, color = c.accent, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable

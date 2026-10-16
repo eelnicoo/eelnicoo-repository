@@ -84,4 +84,13 @@ class HistoryTest {
         assertEquals("Nuevo chat", History.fallbackTitle(" "))
         assertTrue(History.fallbackTitle("a".repeat(100)).endsWith("…"))
     }
+
+    @Test fun withoutThinkingKeepsAssistantTurnsNonEmpty() {
+        val a = j("""{"role":"assistant","content":[{"type":"thinking","thinking":"x","signature":"s"}]}""")
+        val b = j("""{"role":"assistant","content":[{"type":"thinking","thinking":"x","signature":"s"},{"type":"text","text":"hola"}]}""")
+        val out = History.withoutThinking(listOf(user, a, user, b))
+        assertEquals(listOf("text"), History.blocks(out[1]).map { History.type(it) })
+        assertEquals(listOf("text"), History.blocks(out[3]).map { History.type(it) })
+        assertEquals(user, out[0])
+    }
 }

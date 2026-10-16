@@ -76,7 +76,7 @@ class MarkdownParserTest {
         val li = b[2] as MdBlock.ListItem
         assertEquals("uno\nsigue", MarkdownParser.plain(li.inlines))
         assertEquals(true, (b[3] as MdBlock.ListItem).task)
-        assertEquals(2, (b[4] as MdBlock.ListItem).level)
+        assertEquals(1, (b[4] as MdBlock.ListItem).level)
         assertTrue((b[5] as MdBlock.ListItem).ordered)
         assertTrue(b[6] is MdBlock.Quote)
         assertEquals(MdBlock.Rule, b[7])
@@ -85,5 +85,53 @@ class MarkdownParserTest {
         assertEquals("x|y", MarkdownParser.plain(t.rows[0][1]))
         assertEquals(MdBlock.CodeBlock("kotlin", "val x = 1", true), b[9])
         assertEquals(MdBlock.CodeBlock("py", "print(1)", false), b[10])
+    }
+
+    @Test fun indentedFenceInsideList() {
+        val b = MarkdownParser.parse("10. Configura:\n    ```bash\n    npm install\n\n    npm run build\n    ```\n11. Listo")
+        assertEquals(10, (b[0] as MdBlock.ListItem).number)
+        assertEquals(MdBlock.CodeBlock("bash", "npm install\n\nnpm run build", true), b[1])
+        assertEquals(11, (b[2] as MdBlock.ListItem).number)
+    }
+
+    @Test fun inlineTripleBackticksDoNotOpenAFence() {
+        val b = MarkdownParser.parse("```npm install``` y luego:\n\n```bash\nnpm run build\n```")
+        val p = b[0] as MdBlock.Paragraph
+        assertEquals(Inline.Code("npm install"), p.inlines[0])
+        assertEquals(MdBlock.CodeBlock("bash", "npm run build", true), b[1])
+    }
+
+    @Test fun headingKeepsTrailingHashWithoutSpace() {
+        assertEquals(MdBlock.Heading(2, listOf(Inline.Text("Learning C#"))), MarkdownParser.parse("## Learning C#")[0])
+        assertEquals(MdBlock.Heading(1, listOf(Inline.Text("Title"))), MarkdownParser.parse("# Title ##")[0])
+        assertTrue(MarkdownParser.parse("#hashtag")[0] is MdBlock.Paragraph)
+    }
+
+    @Test fun tripleStarIsBoldItalic() {
+        assertEquals(Inline.Bold(listOf(Inline.Italic(listOf(Inline.Text("a"))))), MarkdownParser.parseInline("***a*** b")[0])
+        val inl = MarkdownParser.parseInline("**bold *italic***")
+        val bold = inl.single() as Inline.Bold
+        assertEquals(Inline.Text("bold "), bold.children[0])
+        assertEquals(Inline.Italic(listOf(Inline.Text("italic"))), bold.children[1])
+    }
+
+    @Test fun linkWithParenthesesInUrl() {
+        val inl = MarkdownParser.parseInline("Mira [Kotlin](https://en.wikipedia.org/wiki/Kotlin_(programming_language)) ya")
+        assertEquals(Inline.Link(listOf(Inline.Text("Kotlin")), "https://en.wikipedia.org/wiki/Kotlin_(programming_language)"), inl[1])
+        assertEquals(Inline.Text(" ya"), inl[2])
+    }
+
+    @Test fun nestedListLevelsFollowIndentStack() {
+        val b = MarkdownParser.parse("- a\n    - b\n        - c\n- d")
+        assertEquals(listOf(0, 1, 2, 0), b.map { (it as MdBlock.ListItem).level })
+    }
+
+    @Test fun unknownLanguagesAreNotHighlighted() {
+        val h = io.github.eelnicoo.pocketcode.markdown.CodeHighlighter
+        assertTrue(h.highlight("Error: Could not find class Main", "").isEmpty())
+        assertTrue(h.highlight("git clone https://github.com/x/y", "text").isEmpty())
+        val bash = h.highlight("echo ${'$'}{#arr[@]} items # comentario", "bash")
+        val comments = bash.filter { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.COMMENT }
+        assertEquals(1, comments.size)
     }
 }

@@ -137,17 +137,17 @@ private val AppTypography = Typography().run {
 /** Monospace style for code. */
 val CodeStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp)
 
-/**
- * @param themeMode "system", "light" or "dark".
- * @param chatFont "serif" or "sans".
- */
+/** Resolves the "system" / "light" / "dark" setting to a concrete choice. */
 @Composable
-fun PocketTheme(themeMode: String = "system", chatFont: String = "serif", content: @Composable () -> Unit) {
-    val dark = when (themeMode) {
-        "light" -> false
-        "dark" -> true
-        else -> isSystemInDarkTheme()
-    }
+fun isDarkTheme(themeMode: String): Boolean = when (themeMode) {
+    "light" -> false
+    "dark" -> true
+    else -> isSystemInDarkTheme()
+}
+
+/** @param chatFont "serif" or "sans". */
+@Composable
+fun PocketTheme(dark: Boolean, chatFont: String = "serif", content: @Composable () -> Unit) {
     val claude = if (dark) DarkClaude else LightClaude
     val replyFont = if (chatFont == "sans") FontFamily.Default else FontFamily.Serif
     CompositionLocalProvider(LocalClaude provides claude, LocalReplyFont provides replyFont) {

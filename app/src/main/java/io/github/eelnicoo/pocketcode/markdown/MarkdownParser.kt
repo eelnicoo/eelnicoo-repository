@@ -38,17 +38,27 @@ enum class Align { LEFT, CENTER, RIGHT }
  */
 object MarkdownParser {
 
-    private val fenceRe = Regex("^ {0,3}(`{3,}|~{3,})\\s*([^`\\s]*)?.*$")
-    private val headingRe = Regex("^ {0,3}(#{1,6})\\s+(.*?)\\s*#*\\s*$")
+    // Fences may be indented (e.g. inside list items). A backtick fence's info string
+    // cannot contain backticks, so a line like ```npm install``` stays inline code.
+    private val backtickFenceRe = Regex("^([ \\t]*)(`{3,})[ \\t]*([^`]*)$")
+    private val tildeFenceRe = Regex("^([ \\t]*)(~{3,})[ \\t]*(.*)$")
+    // A closing #-sequence only counts when separated by whitespace ("## C#" keeps its #).
+    private val headingRe = Regex("^ {0,3}(#{1,6})(?:[ \\t]+(.*?))?(?:[ \\t]+#+)?[ \\t]*$")
     private val ruleRe = Regex("^ {0,3}((\\*\\s*){3,}|(-\\s*){3,}|(_\\s*){3,})$")
     private val listRe = Regex("^(\\s*)([-*+]|(\\d{1,9})[.)])\\s+(.*)$")
     private val tableSepRe = Regex("^\\s*\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$")
 
     fun parse(markdown: String): List<MdBlock> = parseLines(markdown.replace("\r\n", "\n").split("\n"))
 
+    private fun fence(line: String): MatchResult? = backtickFenceRe.matchEntire(line) ?: tildeFenceRe.matchEntire(line)
+
+    private fun indentWidth(prefix: String): Int = prefix.fold(0) { acc, ch -> acc + if (ch == '\t') 4 else 1 }
+
     private fun parseLines(lines: List<String>): List<MdBlock> {
         val out = ArrayList<MdBlock>()
         val para = ArrayList<String>()
+        // Indents of the open list levels in the current list run.
+        val listIndents = ArrayList<Int>()
         var i = 0
 
         fun flushPara() {
@@ -60,19 +70,21 @@ object MarkdownParser {
 
         while (i < lines.size) {
             val line = lines[i]
-            val fence = fenceRe.matchEntire(line)
+            val fence = fence(line)
+            if (fence == null && !listRe.matches(line) && line.isNotBlank()) listIndents.clear()
             when {
                 fence != null -> {
                     flushPara()
-                    val marker = fence.groupValues[1]
-                    val lang = fence.groupValues.getOrNull(2).orEmpty()
+                    val indent = indentWidth(fence.groupValues[1])
+                    val marker = fence.groupValues[2]
+                    val lang = fence.groupValues[3].trim().substringBefore(' ')
                     val code = ArrayList<String>()
                     var closed = false
                     i++
                     while (i < lines.size) {
                         val t = lines[i].trim()
                         if (t.length >= marker.length && t.all { it == marker[0] }) { closed = true; i++; break }
-                        code.add(lines[i]); i++
+                        code.add(stripIndent(lines[i], indent)); i++
                     }
                     out.add(MdBlock.CodeBlock(lang, code.joinToString("\n"), closed))
                     continue
@@ -81,7 +93,7 @@ object MarkdownParser {
                 headingRe.matches(line) -> {
                     flushPara()
                     val m = headingRe.matchEntire(line)!!
-                    out.add(MdBlock.Heading(m.groupValues[1].length, parseInline(m.groupValues[2])))
+                    out.add(MdBlock.Heading(m.groupValues[1].length, parseInline(m.groupValues[2].trim())))
                 }
                 ruleRe.matches(line) -> { flushPara(); out.add(MdBlock.Rule) }
                 line.trimStart().startsWith(">") -> {
@@ -118,7 +130,11 @@ object MarkdownParser {
                 listRe.matches(line) -> {
                     flushPara()
                     val m = listRe.matchEntire(line)!!
-                    val indent = m.groupValues[1].replace("\t", "    ").length
+                    val indent = indentWidth(m.groupValues[1])
+                    // Nesting level from the stack of indents seen in this list run.
+                    while (listIndents.isNotEmpty() && listIndents.last() > indent) listIndents.removeAt(listIndents.lastIndex)
+                    if (listIndents.isEmpty() || listIndents.last() < indent) listIndents.add(indent)
+                    val level = listIndents.size - 1
                     val num = m.groupValues[3]
                     var text = m.groupValues[4]
                     var task: Boolean? = null
@@ -128,12 +144,12 @@ object MarkdownParser {
                     val buf = StringBuilder(text)
                     i++
                     while (i < lines.size && lines[i].isNotBlank() && !listRe.matches(lines[i]) &&
-                        fenceRe.matchEntire(lines[i]) == null && !headingRe.matches(lines[i]) &&
+                        fence(lines[i]) == null && !headingRe.matches(lines[i]) &&
                         lines[i].startsWith(" ")
                     ) {
                         buf.append('\n').append(lines[i].trim()); i++
                     }
-                    out.add(MdBlock.ListItem(indent / 2, num.isNotEmpty(), num.toIntOrNull() ?: 0, task, parseInline(buf.toString())))
+                    out.add(MdBlock.ListItem(level, num.isNotEmpty(), num.toIntOrNull() ?: 0, task, parseInline(buf.toString())))
                     continue
                 }
                 else -> para.add(line)
@@ -142,6 +158,17 @@ object MarkdownParser {
         }
         flushPara()
         return out
+    }
+
+    /** Removes up to [width] columns of leading whitespace (a tab counts as 4). */
+    private fun stripIndent(line: String, width: Int): String {
+        var col = 0
+        var k = 0
+        while (k < line.length && col < width && (line[k] == ' ' || line[k] == '\t')) {
+            col += if (line[k] == '\t') 4 else 1
+            k++
+        }
+        return line.substring(k)
     }
 
     private fun isTableStart(lines: List<String>, i: Int): Boolean =
@@ -197,6 +224,14 @@ object MarkdownParser {
                         out.add(Inline.Code(code))
                         i = close + run
                     }
+                }
+                (s.startsWith("***", i) || s.startsWith("___", i)) && canOpen(s, i, 3) &&
+                    findClose(s, i + 3, s.substring(i, i + 3)) >= 0 -> {
+                    val delim = s.substring(i, i + 3)
+                    val close = findClose(s, i + 3, delim)
+                    flush()
+                    out.add(Inline.Bold(listOf(Inline.Italic(parseInline(s.substring(i + 3, close))))))
+                    i = close + 3
                 }
                 (s.startsWith("**", i) || s.startsWith("__", i)) && canOpen(s, i, 2) -> {
                     val delim = s.substring(i, i + 2)
@@ -286,11 +321,31 @@ object MarkdownParser {
                         k = if (inner < 0) k + 2 else inner + 2
                         continue
                     }
-                } else return k
+                } else {
+                    // "**bold *italic***": the first '*' closes the inner italic.
+                    if (delim.length == 2 && k + 2 < s.length && s[k + 2] == delim[0] &&
+                        hasUnclosedSingle(s.substring(from, k), delim[0])
+                    ) return k + 1
+                    return k
+                }
             }
             k++
         }
         return -1
+    }
+
+    /** True if [text] has an odd number of lone [ch] delimiters (not part of a pair). */
+    private fun hasUnclosedSingle(text: String, ch: Char): Boolean {
+        var count = 0
+        var k = 0
+        while (k < text.length) {
+            if (text[k] == ch) {
+                val run = countRun(text, k, ch)
+                if (run == 1) count++
+                k += run
+            } else k++
+        }
+        return count % 2 == 1
     }
 
     /** Parses `[text](url)` at [i]; returns (text, url, endIndex) or null. */
@@ -307,7 +362,19 @@ object MarkdownParser {
             k++
         }
         if (k >= s.length || k + 1 >= s.length || s[k + 1] != '(') return null
-        val close = s.indexOf(')', k + 2)
+        // The destination may itself contain balanced parentheses (Wikipedia links...).
+        var close = -1
+        var parens = 0
+        var j = k + 2
+        while (j < s.length) {
+            when (s[j]) {
+                '\\' -> j++
+                '\n' -> return null
+                '(' -> parens++
+                ')' -> if (parens == 0) { close = j; break } else parens--
+            }
+            j++
+        }
         if (close < 0) return null
         val url = s.substring(k + 2, close).trim().substringBefore(' ').removeSurrounding("<", ">")
         if (url.isEmpty() || url.contains('\n')) return null

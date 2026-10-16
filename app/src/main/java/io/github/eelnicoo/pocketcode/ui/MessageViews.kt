@@ -209,10 +209,14 @@ fun AssistantTurn(row: AssistantRow, onRetry: () -> Unit) {
         if (row.streaming) {
             val working = parts.lastOrNull().let { it == null || it is ToolPart || (it is ThinkingPart) }
             ClaudeSpark(size = if (working) 26.dp else 20.dp, animated = true, modifier = Modifier.padding(top = 2.dp))
-        } else if (row.copyText.isNotEmpty()) {
-            ActionRow(row.copyText, showRetry = row.isLast, onRetry = onRetry)
-        } else if (row.isLast && parts.isEmpty()) {
-            Text("(sin respuesta)", color = c.textTertiary, fontSize = 14.sp)
+        } else {
+            if (row.incomplete) {
+                if (parts.isEmpty()) Text("Respuesta interrumpida", color = c.textTertiary, fontSize = 14.sp)
+                ResumeChip(if (parts.isEmpty()) "Reintentar" else "Continuar", onRetry)
+            }
+            if (row.copyText.isNotEmpty()) {
+                ActionRow(row.copyText, showRetry = row.isLast && !row.incomplete, onRetry = onRetry)
+            }
         }
     }
 }
@@ -379,9 +383,25 @@ private fun ActionRow(copyText: String, showRetry: Boolean, onRetry: () -> Unit)
 }
 
 @Composable
+private fun ResumeChip(label: String, onClick: () -> Unit) {
+    val c = LocalClaude.current
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Refresh, null, tint = c.accent, modifier = Modifier.size(16.dp))
+        Text("  $label", color = c.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
 private fun SmallAction(icon: ImageVector, description: String, onClick: () -> Unit) {
     val c = LocalClaude.current
-    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
         Icon(icon, contentDescription = description, tint = c.textTertiary, modifier = Modifier.size(18.dp))
     }
 }
