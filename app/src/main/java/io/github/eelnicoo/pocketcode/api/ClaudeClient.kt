@@ -33,10 +33,7 @@ import java.util.concurrent.TimeUnit
  * Messages API client (raw HTTP + SSE) that runs the agent loop: stream a reply,
  * execute requested tools, send results back, repeat until the model is done.
  */
-class ClaudeClient(
-    private val oauth: ClaudeOAuth,
-    private val registry: ToolRegistry,
-) {
+class ClaudeClient(private val oauth: ClaudeOAuth) {
     data class Config(
         val model: String,
         val maxTokens: Int,
@@ -82,10 +79,10 @@ class ClaudeClient(
      * Returns the updated history. Cancellation propagates as CancellationException;
      * every message already appended was reported through [Listener.onAppend].
      */
-    suspend fun run(history: List<JsonObject>, cfg: Config, listener: Listener): List<JsonObject> {
+    suspend fun run(history: List<JsonObject>, cfg: Config, listener: Listener, tools: ToolRegistry): List<JsonObject> {
         var h = history
         repeat(MAX_ITERATIONS) {
-            val asm = streamWithRetry(h, cfg, listener) {
+            val asm = streamWithRetry(h, cfg, listener, tools) {
                 // Keep the cleaned history for the rest of this run, not just one request.
                 h = History.withoutThinking(h)
                 listener.onThinkingStripped()
@@ -120,7 +117,7 @@ class ClaudeClient(
                     listener.onAppend(user)
                 }
                 toolUses.isNotEmpty() -> {
-                    val results = toolUses.map { executeTool(it, asm, listener) }
+                    val results = toolUses.map { executeTool(it, asm, listener, tools) }
                     // A stopped run must not report results into whatever chat is now open.
                     currentCoroutineContext().ensureActive()
                     val user = History.message("user", results)
@@ -139,7 +136,7 @@ class ClaudeClient(
         return h
     }
 
-    private suspend fun executeTool(tu: JsonObject, asm: StreamAssembler, listener: Listener): JsonObject {
+    private suspend fun executeTool(tu: JsonObject, asm: StreamAssembler, listener: Listener, registry: ToolRegistry): JsonObject {
         // After Stop, the remaining tools of the batch must not start.
         currentCoroutineContext().ensureActive()
         val id = History.str(tu, "id") ?: ""
@@ -164,6 +161,7 @@ class ClaudeClient(
         h: List<JsonObject>,
         cfg: Config,
         listener: Listener,
+        tools: ToolRegistry,
         onStripped: () -> Unit,
     ): StreamAssembler {
         var attempt = 0
@@ -174,7 +172,7 @@ class ClaudeClient(
         while (true) {
             val asm = StreamAssembler()
             try {
-                streamOnce(history, cfg, asm, listener)
+                streamOnce(history, cfg, asm, listener, tools)
                 return asm
             } catch (e: ApiException) {
                 listener.onDraft(null)
@@ -233,13 +231,13 @@ class ClaudeClient(
         }
     }
 
-    private suspend fun streamOnce(h: List<JsonObject>, cfg: Config, asm: StreamAssembler, listener: Listener) {
+    private suspend fun streamOnce(h: List<JsonObject>, cfg: Config, asm: StreamAssembler, listener: Listener, tools: ToolRegistry) {
         val token = oauth.validAccessToken()
             ?: throw ApiException(401, null, "No has iniciado sesión con tu cuenta Claude.")
         val fallbacks = cfg.model !in noFallbacks && Settings.modelInfo(cfg.model).supportsFallback
         val thinking = cfg.model !in noThinking
         val binding = thinking && cfg.model !in noBlockBinding
-        val body = buildRequest(h, cfg, fallbacks, thinking, binding)
+        val body = buildRequest(h, cfg, tools, fallbacks, thinking, binding)
         val betas = buildList {
             add(OAUTH_BETA)
             if (fallbacks) add(FALLBACK_BETA)
@@ -313,6 +311,7 @@ class ClaudeClient(
     private fun buildRequest(
         h: List<JsonObject>,
         cfg: Config,
+        tools: ToolRegistry,
         fallbacks: Boolean,
         thinking: Boolean,
         binding: Boolean,
@@ -325,7 +324,7 @@ class ClaudeClient(
             add(History.textBlock(SYSTEM_PROMPT + "\n\n" + cfg.context))
         })
         put("messages", JsonArray(h))
-        put("tools", JsonArray(registry.defs()))
+        put("tools", JsonArray(tools.defs()))
         if (thinking) {
             put("thinking", buildJsonObject {
                 put("type", "adaptive")

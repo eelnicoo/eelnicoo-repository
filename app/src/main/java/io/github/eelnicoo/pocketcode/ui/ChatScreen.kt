@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,6 +139,8 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
     // While the user reads higher up inside a streaming answer, compensate its growth so the
     // text does not slide away. Done after layout and never during a fling or animation.
     val streamingNow by rememberUpdatedState(state.busy)
+    val dragged by listState.interactionSource.collectIsDraggedAsState()
+    val draggedNow by rememberUpdatedState(dragged)
     LaunchedEffect(listState) {
         var lastKey: Any? = null
         var lastSize = 0
@@ -145,7 +148,9 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
             .collect { info ->
                 val (key, size) = info ?: return@collect
                 val delta = size - lastSize
-                if (key == lastKey && delta > 0 && streamingNow && !listState.isScrollInProgress &&
+                // A finger drag cannot be interrupted by the request (it has higher priority), while
+                // flings and the jump animation must not be: only compensate when idle or dragging.
+                if (key == lastKey && delta > 0 && streamingNow && (draggedNow || !listState.isScrollInProgress) &&
                     listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 0
                 ) {
                     listState.requestScrollToItem(0, listState.firstVisibleItemScrollOffset + delta)
@@ -223,7 +228,14 @@ fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
                         items(rows.asReversed(), key = { it.key }) { row ->
                             when (row) {
                                 is UserRow -> UserMessage(row, canEdit = !state.busy) { vm.startEdit(it) }
-                                is AssistantRow -> AssistantTurn(row, onRetry = { vm.retry() })
+                                is AssistantRow -> {
+                                    val failed = state.failedTurn
+                                    if (row.isLast && failed != null) {
+                                        AssistantTurn(row, resumeLabel = "Editar mensaje", onRetry = { vm.startEdit(failed) })
+                                    } else {
+                                        AssistantTurn(row, onRetry = { vm.retry() })
+                                    }
+                                }
                             }
                         }
                     }

@@ -231,13 +231,14 @@ object MarkdownParser {
                     (findClose(s, i + 3, s.substring(i, i + 3)) >= 0 || tripleSplit(s, i) != null) -> {
                     val delim = s.substring(i, i + 3)
                     val close = findClose(s, i + 3, delim)
+                    val split = tripleSplit(s, i)
                     flush()
-                    if (close >= 0) {
+                    if (close >= 0 && (split == null || close < split.second)) {
                         out.add(Inline.Bold(listOf(Inline.Italic(parseInline(s.substring(i + 3, close))))))
                         i = close + 3
                     } else {
                         // "***bold** italic*": bold closes first, then the outer italic.
-                        val (c2, c1) = tripleSplit(s, i)!!
+                        val (c2, c1) = split!!
                         out.add(Inline.Italic(listOf(Inline.Bold(parseInline(s.substring(i + 3, c2)))) + parseInline(s.substring(c2 + 2, c1))))
                         i = c1 + 1
                     }
@@ -320,6 +321,18 @@ object MarkdownParser {
                 k = if (close < 0) k + run else close + run
                 continue
             }
+            // Looking for a lone '*' / '_': a nested "**…**" (even one opened after a space)
+            // is skipped as a unit, so its closer is never mistaken for an opener.
+            if (delim.length == 1 && countRun(s, k, delim[0]) == 2 && (k == from || s[k - 1] != delim[0]) &&
+                k + 2 < s.length && !s[k + 2].isWhitespace()
+            ) {
+                val inner = findClose(s, k + 2, delim + delim)
+                if (inner >= 0) {
+                    k = inner + 2
+                    if (k < s.length && countRun(s, k, delim[0]) == 1) return k
+                    continue
+                }
+            }
             if (s.startsWith(delim, k) && k > from && !s[k - 1].isWhitespace()) {
                 if (delim.length == 1) {
                     // "*italic **bold***": the run of three closes the inner bold first.
@@ -351,7 +364,9 @@ object MarkdownParser {
         val c2 = findClose(s, i + 3, "$d$d")
         if (c2 < 0) return null
         val c1 = findClose(s, c2 + 2, "$d")
-        return if (c1 < 0) null else c2 to c1
+        // Same rule as single '_': an underscore inside a word (snake_case) never closes.
+        if (c1 < 0 || (d == '_' && c1 + 1 < s.length && s[c1 + 1].isLetterOrDigit())) return null
+        return c2 to c1
     }
 
     /** True if [text] has an odd number of [ch][ch] runs (an unclosed bold opener). */

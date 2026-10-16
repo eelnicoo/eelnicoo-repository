@@ -29,6 +29,13 @@ data class ChatFile(
      * requests: thinking blocks are bound to the exact prefix they were produced with.
      */
     val context: String? = null,
+    /**
+     * Index of a human turn that was refused or rejected (400/413). It is reopened for
+     * editing and is replaced, not merged, by whatever the user sends next.
+     */
+    val failedTurn: Int? = null,
+    /** Why [failedTurn] failed, shown when the chat is opened. */
+    val failedNote: String? = null,
 )
 
 /**

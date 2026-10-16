@@ -158,4 +158,18 @@ class MarkdownParserTest {
             MarkdownParser.parseInline(t)
         }
     }
+
+    @Test fun italicAroundTwoBoldSpansAndMixedTriples() {
+        val a = MarkdownParser.parseInline("*Usa **git add** y luego **git commit***").single() as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Text("git add"))), a.children[1])
+        assertEquals(Inline.Bold(listOf(Inline.Text("git commit"))), a.children.last())
+        val b = MarkdownParser.parseInline("***Nota:** algo* y ***otra***")
+        assertEquals(Inline.Italic(listOf(Inline.Bold(listOf(Inline.Text("Nota:"))), Inline.Text(" algo"))), b[0])
+        assertEquals(Inline.Bold(listOf(Inline.Italic(listOf(Inline.Text("otra"))))), b.last())
+    }
+
+    @Test fun snakeCaseSurvivesTripleUnderscore() {
+        assertEquals("_Nota ver my_var_name", MarkdownParser.plain(MarkdownParser.parseInline("___Nota__ ver my_var_name")))
+        assertEquals(listOf(Inline.Text("5 * 3 = 15 y a*b")), MarkdownParser.parseInline("5 * 3 = 15 y a*b"))
+    }
 }

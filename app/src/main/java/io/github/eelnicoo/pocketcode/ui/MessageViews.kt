@@ -187,7 +187,7 @@ private fun Base64Thumb(img: ImageRef, sizeDp: Int) {
 // ---------------------------------------------------------------------------- assistant
 
 @Composable
-fun AssistantTurn(row: AssistantRow, onRetry: () -> Unit) {
+fun AssistantTurn(row: AssistantRow, onRetry: () -> Unit, resumeLabel: String? = null) {
     val c = LocalClaude.current
     Column(Modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         var i = 0
@@ -215,8 +215,13 @@ fun AssistantTurn(row: AssistantRow, onRetry: () -> Unit) {
             ClaudeSpark(size = if (working) 26.dp else 20.dp, animated = true, modifier = Modifier.padding(top = 2.dp))
         } else {
             if (row.incomplete) {
-                if (parts.isEmpty()) Text("Respuesta interrumpida", color = c.textTertiary, fontSize = 14.sp)
-                ResumeChip(if (parts.isEmpty()) "Reintentar" else "Continuar", onRetry)
+                if (parts.isEmpty()) {
+                    Text(
+                        if (resumeLabel != null) "No se pudo procesar este mensaje" else "Respuesta interrumpida",
+                        color = c.textTertiary, fontSize = 14.sp,
+                    )
+                }
+                ResumeChip(resumeLabel ?: if (parts.isEmpty()) "Reintentar" else "Continuar", onRetry)
             }
             if (row.copyText.isNotEmpty()) {
                 ActionRow(row.copyText, showRetry = row.isLast && !row.incomplete, onRetry = onRetry)

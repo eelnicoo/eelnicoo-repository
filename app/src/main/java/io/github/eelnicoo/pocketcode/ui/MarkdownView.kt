@@ -79,6 +79,14 @@ fun MarkdownView(
     val base = TextStyle(color = color, fontFamily = fontFamily, fontSize = fontSize, lineHeight = fontSize * 1.55f)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    // One marker column for the whole answer, sized for its largest number, so "9." and
+    // "10." line up even when code blocks split a numbered list into several groups.
+    val maxNumber = remember(blocks) { blocks.filterIsInstance<MdBlock.ListItem>().filter { it.ordered }.maxOfOrNull { it.number } }
+    val markerWidth = remember(maxNumber, base, density) {
+        maxNumber?.let {
+            with(density) { measurer.measure("$it.", base, softWrap = false, maxLines = 1).size.width.toDp() } + 8.dp
+        }?.coerceAtLeast(24.dp) ?: 24.dp
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         var i = 0
         while (i < blocks.size) {
@@ -87,11 +95,6 @@ fun MarkdownView(
                 // Consecutive list items render as one tight group.
                 val group = ArrayList<MdBlock.ListItem>()
                 while (i < blocks.size && blocks[i] is MdBlock.ListItem) { group.add(blocks[i] as MdBlock.ListItem); i++ }
-                // One marker column per list, sized for its largest number, so 9. and 10. align.
-                val maxNumber = group.filter { it.ordered }.maxOfOrNull { it.number }
-                val markerWidth = maxNumber?.let {
-                    with(density) { measurer.measure("$it.", base, softWrap = false, maxLines = 1).size.width.toDp() } + 8.dp
-                }?.coerceAtLeast(24.dp) ?: 24.dp
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { group.forEach { ListItemView(it, base, markerWidth) } }
                 continue
             }
@@ -137,7 +140,7 @@ private fun BlockView(b: MdBlock, base: TextStyle, growing: Boolean = false) {
 private fun ListItemView(item: MdBlock.ListItem, base: TextStyle, markerWidth: androidx.compose.ui.unit.Dp) {
     val c = LocalClaude.current
     Row(Modifier.padding(start = (item.level * 18).dp)) {
-        Box(Modifier.width(markerWidth), contentAlignment = Alignment.TopStart) {
+        Box(Modifier.widthIn(min = markerWidth), contentAlignment = Alignment.TopStart) {
             when {
                 item.task != null -> Icon(
                     if (item.task) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
@@ -145,7 +148,10 @@ private fun ListItemView(item: MdBlock.ListItem, base: TextStyle, markerWidth: a
                     tint = if (item.task) c.accent else c.textTertiary,
                     modifier = Modifier.padding(top = 3.dp).size(18.dp),
                 )
-                item.ordered -> Text("${item.number}.", style = base.copy(color = c.textSecondary), softWrap = false, maxLines = 1)
+                item.ordered -> Text(
+                    "${item.number}.", style = base.copy(color = c.textSecondary), softWrap = false, maxLines = 1,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
                 else -> Text(if (item.level == 0) "•" else "◦", style = base.copy(color = c.textSecondary))
             }
         }

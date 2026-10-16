@@ -88,13 +88,13 @@ fun Composer(
     // The tick is an event: a new composition (back from Settings, rotation) must not replay it.
     var handledTick by rememberSaveable { mutableIntStateOf(focusTick) }
     LaunchedEffect(focusTick) {
-        if (focusTick != handledTick) {
-            handledTick = focusTick
-            if (loggedIn) {
-                runCatching { focusRequester.requestFocus() }
-                keyboard?.show()
-            }
+        // Only a newer tick is a request; a lower one (fresh ViewModel after process death)
+        // just resynchronises.
+        if (focusTick > handledTick && loggedIn) {
+            runCatching { focusRequester.requestFocus() }
+            keyboard?.show()
         }
+        handledTick = focusTick
     }
     Column(modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp)) {
         if (editing) {
