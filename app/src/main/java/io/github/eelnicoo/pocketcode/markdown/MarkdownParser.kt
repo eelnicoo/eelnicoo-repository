@@ -327,7 +327,8 @@ object MarkdownParser {
                 k + 2 < s.length && !s[k + 2].isWhitespace()
             ) {
                 val inner = findClose(s, k + 2, delim + delim)
-                if (inner >= 0) {
+                // Skip it only if the italic does not close inside it ("*a **kwargs* y **b**").
+                if (inner >= 0 && !hasUnclosedSingle(s.substring(k + 2, inner), delim[0])) {
                     k = inner + 2
                     if (k < s.length && countRun(s, k, delim[0]) == 1) return k
                     continue

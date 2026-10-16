@@ -178,9 +178,10 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
             val chat = safeStore { store.load(recent.id) } ?: return@launch
             withContext(Dispatchers.Main) {
                 val s = _state.value
-                // Nothing navigated yet. Anything already in the composer (e.g. a photo coming
-                // back from the camera after process death) belongs to this chat: keep it.
-                val untouched = navSeq == 0 && s.chatId == null && s.messages.isEmpty() && !s.busy
+                // Nothing navigated or typed yet. Attachments already in the composer (a photo
+                // coming back from the camera after process death) belong to this chat: keep them.
+                val untouched = navSeq == 0 && s.chatId == null && s.messages.isEmpty() && !s.busy &&
+                    s.composerText.isEmpty()
                 if (untouched) show(chat, keepComposer = true)
             }
         }
@@ -252,7 +253,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         // A message that was refused or rejected reopens for editing (if the composer is free).
         if (failed != null && _state.value.let { it.composerText.isBlank() && it.attachments.isEmpty() && it.pendingAttachments == 0 }) {
-            startEdit(failed)
+            startEdit(failed, focus = false)
         }
     }
 
@@ -311,8 +312,12 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
 
     fun removeAttachment(id: String) = _state.update { s -> s.copy(attachments = s.attachments.filterNot { it.id == id }) }
 
-    /** Puts a sent message back in the composer; sending replaces it and what followed. */
-    fun startEdit(index: Int) {
+    /**
+     * Puts a sent message back in the composer; sending replaces it and what followed.
+     * [focus] is false when the edit starts on its own while a chat opens (the closing
+     * drawer would take the focus away again anyway).
+     */
+    fun startEdit(index: Int, focus: Boolean = true) {
         val s = _state.value
         if (s.busy) return
         val msg = s.messages.getOrNull(index) ?: return
@@ -321,7 +326,7 @@ class ChatViewModel(private val app: Application) : AndroidViewModel(app) {
         composerSeq++
         _state.update {
             it.copy(editingIndex = index, composerText = humanText(msg), attachments = emptyList(),
-                pendingAttachments = 0, focusTick = it.focusTick + 1)
+                pendingAttachments = 0, focusTick = if (focus) it.focusTick + 1 else it.focusTick)
         }
         restoreAttachments(msg)
     }

@@ -172,4 +172,11 @@ class MarkdownParserTest {
         assertEquals("_Nota ver my_var_name", MarkdownParser.plain(MarkdownParser.parseInline("___Nota__ ver my_var_name")))
         assertEquals(listOf(Inline.Text("5 * 3 = 15 y a*b")), MarkdownParser.parseInline("5 * 3 = 15 y a*b"))
     }
+
+    @Test fun unpairedDoubleStarInsideItalic() {
+        val inl = MarkdownParser.parseInline("*Nota: el parámetro **kwargs es opcional* y **no** se valida.")
+        assertEquals(Inline.Italic(listOf(Inline.Text("Nota: el parámetro **kwargs es opcional"))), inl[0])
+        assertEquals(Inline.Text(" y "), inl[1])
+        assertEquals(Inline.Bold(listOf(Inline.Text("no"))), inl[2])
+    }
 }
