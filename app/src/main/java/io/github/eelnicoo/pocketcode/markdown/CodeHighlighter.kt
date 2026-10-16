@@ -92,7 +92,8 @@ object CodeHighlighter {
      * means quotes inside comments and comment markers inside strings are handled right.
      *
      * A quote that never closes (an apostrophe in prose, a Rust lifetime) produces no token.
-     * In markup, quotes only start strings inside a tag; text content is left alone.
+     * In markup, quotes only start strings inside a tag (or right after '=', for snippets
+     * that are just attributes); text content is left alone.
      * [rawBacktick]: backtick strings have no escapes (Go raw strings).
      */
     private fun scanLiterals(
@@ -135,7 +136,8 @@ object CodeHighlighter {
                     val close = code.indexOf(code.substring(i, i + 3), i + 3)
                     if (close < 0) { i += 3 } else { out.add(Token(i, close + 3, TokenKind.STRING)); i = close + 3 }
                 }
-                (!xml || inTag) && (c == '"' || (singleQuote && c == '\'') || (backtick && c == '`')) &&
+                (!xml || inTag || (i > 0 && code[i - 1] == '=')) &&
+                    (c == '"' || (singleQuote && c == '\'') || (backtick && c == '`')) &&
                     i >= deadUntil[QUOTES.indexOf(c)] -> {
                     val multiline = xml || c == '`'
                     val escapes = !xml && !(rawBacktick && c == '`')

@@ -263,6 +263,7 @@ class MarkdownParserTest {
         val xml = "<resources>\n  <string name=\"error\">Can't reach the server</string>\n  <string name=\"retry\">Retry</string>\n</resources>"
         assertEquals(listOf("\"error\"", "\"retry\""), strings(xml, "xml"))
         assertEquals(6, h.highlight(xml, "xml").count { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.TAG && xml[it.start] == '<' })
+        assertEquals(listOf("\"match_parent\""), strings("android:layout_width=\"match_parent\"", "xml"))
         // A lone quote (a Rust lifetime) does not swallow the rest of the line.
         assertEquals(listOf("\"pocket\""), strings("const NAME: &'static str = \"pocket\";", "rust"))
         // Go raw strings have no escapes.
