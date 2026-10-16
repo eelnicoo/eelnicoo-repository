@@ -42,11 +42,58 @@ object MarkdownParser {
     // cannot contain backticks, so a line like ```npm install``` stays inline code.
     private val backtickFenceRe = Regex("^([ \\t]*)(`{3,})[ \\t]*([^`]*)$")
     private val tildeFenceRe = Regex("^([ \\t]*)(~{3,})[ \\t]*(.*)$")
-    // A closing #-sequence only counts when separated by whitespace ("## C#" keeps its #).
-    private val headingRe = Regex("^ {0,3}(#{1,6})(?:[ \\t]+(.*?))?(?:[ \\t]+#+)?[ \\t]*$")
-    private val ruleRe = Regex("^ {0,3}((\\*\\s*){3,}|(-\\s*){3,}|(_\\s*){3,})$")
     private val listRe = Regex("^(\\s*)([-*+]|(\\d{1,9})[.)])\\s+(.*)$")
-    private val tableSepRe = Regex("^\\s*\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$")
+
+    // Headings, rules and table separators are matched by hand: Java's regex engine recurses
+    // on repeated groups, and a long line of "*" or "-" would overflow the stack.
+
+    /** "## Title ##" -> (2, "Title"). A closing #-run only counts after whitespace ("## C#"). */
+    private fun heading(line: String): Pair<Int, String>? {
+        var k = 0
+        while (k < line.length && k < 3 && line[k] == ' ') k++
+        val start = k
+        while (k < line.length && line[k] == '#') k++
+        val level = k - start
+        if (level !in 1..6) return null
+        if (k < line.length && line[k] != ' ' && line[k] != '\t') return null
+        var text = line.substring(k).trim()
+        val trailing = text.takeLastWhile { it == '#' }
+        if (trailing.isNotEmpty()) {
+            val before = text.dropLast(trailing.length)
+            if (before.isEmpty() || before.last().isWhitespace()) text = before.trim()
+        }
+        return level to text
+    }
+
+    /** Three or more of the same '*', '-' or '_' (spaces allowed), and nothing else. */
+    private fun isRule(line: String): Boolean {
+        val t = line.trimEnd()
+        val lead = t.length - t.trimStart().length
+        if (lead > 3) return false
+        val body = t.trimStart()
+        if (body.isEmpty()) return false
+        val ch = body[0]
+        if (ch != '*' && ch != '-' && ch != '_') return false
+        var count = 0
+        for (c in body) {
+            when {
+                c == ch -> count++
+                c == ' ' || c == '\t' -> Unit
+                else -> return false
+            }
+        }
+        return count >= 3
+    }
+
+    /** "|:--|--:|" style separator row of a GFM table. */
+    private fun isTableSeparator(line: String): Boolean {
+        val cells = line.trim().removePrefix("|").removeSuffix("|").split('|')
+        if (cells.isEmpty()) return false
+        return cells.all { cell ->
+            val c = cell.trim().removePrefix(":").removeSuffix(":")
+            c.isNotEmpty() && c.all { it == '-' }
+        }
+    }
 
     fun parse(markdown: String): List<MdBlock> = parseLines(markdown.replace("\r\n", "\n").split("\n"))
 
@@ -92,12 +139,12 @@ object MarkdownParser {
                     continue
                 }
                 line.isBlank() -> flushPara()
-                headingRe.matches(line) -> {
+                heading(line) != null -> {
                     flushPara()
-                    val m = headingRe.matchEntire(line)!!
-                    out.add(MdBlock.Heading(m.groupValues[1].length, parseInline(m.groupValues[2].trim())))
+                    val (level, text) = heading(line)!!
+                    out.add(MdBlock.Heading(level, parseInline(text)))
                 }
-                ruleRe.matches(line) -> { flushPara(); out.add(MdBlock.Rule) }
+                isRule(line) -> { flushPara(); out.add(MdBlock.Rule) }
                 line.trimStart().startsWith(">") -> {
                     flushPara()
                     val quoted = ArrayList<String>()
@@ -146,7 +193,7 @@ object MarkdownParser {
                     val buf = StringBuilder(text)
                     i++
                     while (i < lines.size && lines[i].isNotBlank() && !listRe.matches(lines[i]) &&
-                        fence(lines[i]) == null && !headingRe.matches(lines[i]) &&
+                        fence(lines[i]) == null && heading(lines[i]) == null &&
                         lines[i].startsWith(" ")
                     ) {
                         buf.append('\n').append(lines[i].trim()); i++
@@ -174,7 +221,7 @@ object MarkdownParser {
     }
 
     private fun isTableStart(lines: List<String>, i: Int): Boolean =
-        i + 1 < lines.size && lines[i].contains('|') && tableSepRe.matches(lines[i + 1]) && lines[i + 1].contains('-')
+        i + 1 < lines.size && lines[i].contains('|') && lines[i + 1].contains('-') && isTableSeparator(lines[i + 1])
 
     private fun splitRow(line: String): List<String> {
         var s = line.trim()
@@ -202,7 +249,12 @@ object MarkdownParser {
 
     private const val ESCAPABLE = "\\`*_{}[]()#+-.!|~<>"
 
-    fun parseInline(s: String): List<Inline> {
+    /** Above this many '*'/'_' in one paragraph, emphasis is left as text (bounded cost). */
+    private const val MAX_EMPHASIS_DELIMITERS = 400
+
+    fun parseInline(s: String): List<Inline> = parseInline(s, emphasis = s.count { it == '*' || it == '_' } <= MAX_EMPHASIS_DELIMITERS)
+
+    private fun parseInline(s: String, emphasis: Boolean): List<Inline> {
         val out = ArrayList<Inline>()
         val buf = StringBuilder()
         fun flush() { if (buf.isNotEmpty()) { out.add(Inline.Text(buf.toString())); buf.clear() } }
@@ -227,7 +279,7 @@ object MarkdownParser {
                         i = close + run
                     }
                 }
-                (s.startsWith("***", i) || s.startsWith("___", i)) && canOpen(s, i, 3) &&
+                emphasis && (s.startsWith("***", i) || s.startsWith("___", i)) && canOpen(s, i, 3) &&
                     (findClose(s, i + 3, s.substring(i, i + 3)) >= 0 || tripleSplit(s, i) != null) -> {
                     val delim = s.substring(i, i + 3)
                     val close = findClose(s, i + 3, delim)
@@ -243,7 +295,7 @@ object MarkdownParser {
                         i = c1 + 1
                     }
                 }
-                (s.startsWith("**", i) || s.startsWith("__", i)) && canOpen(s, i, 2) -> {
+                emphasis && (s.startsWith("**", i) || s.startsWith("__", i)) && canOpen(s, i, 2) -> {
                     val delim = s.substring(i, i + 2)
                     val close = findClose(s, i + 2, delim)
                     if (close < 0) { buf.append(delim); i += 2 }
@@ -254,7 +306,7 @@ object MarkdownParser {
                     if (close < 0) { buf.append("~~"); i += 2 }
                     else { flush(); out.add(Inline.Strike(parseInline(s.substring(i + 2, close)))); i = close + 2 }
                 }
-                (c == '*' || c == '_') && canOpen(s, i, 1) && !(c == '_' && i > 0 && s[i - 1].isLetterOrDigit()) -> {
+                emphasis && (c == '*' || c == '_') && canOpen(s, i, 1) && !(c == '_' && i > 0 && s[i - 1].isLetterOrDigit()) -> {
                     val close = findClose(s, i + 1, c.toString())
                     if (close < 0 || (c == '_' && close + 1 < n && s[close + 1].isLetterOrDigit())) { buf.append(c); i++ }
                     else { flush(); out.add(Inline.Italic(parseInline(s.substring(i + 1, close)))); i = close + 1 }
@@ -328,7 +380,7 @@ object MarkdownParser {
             ) {
                 val inner = findClose(s, k + 2, delim + delim)
                 // Skip it only if the italic does not close inside it ("*a **kwargs* y **b**").
-                if (inner >= 0 && !hasUnclosedSingle(s.substring(k + 2, inner), delim[0])) {
+                if (inner >= 0 && !closesOuter(s, k + 2, inner, delim[0])) {
                     k = inner + 2
                     if (k < s.length && countRun(s, k, delim[0]) == 1) return k
                     continue
@@ -357,6 +409,34 @@ object MarkdownParser {
             k++
         }
         return -1
+    }
+
+    /**
+     * True if a lone [ch] in s[from, to) closes an emphasis opened before [from]. Intraword
+     * underscores and delimiters that can only open (or are surrounded by spaces) are ignored,
+     * so a bold glob like "**tests/[star].py**" or "__max_tokens__" is still skipped as one unit.
+     */
+    private fun closesOuter(s: String, from: Int, to: Int, ch: Char): Boolean {
+        var depth = 0
+        var k = from
+        while (k < to) {
+            if (s[k] != ch) { k++; continue }
+            val run = countRun(s, k, ch)
+            if (run == 1 && s[k - 1] != ch) {
+                val prevSpace = s[k - 1].isWhitespace()
+                val next = s.getOrNull(k + 1)
+                val nextSpace = next == null || next.isWhitespace()
+                val intraword = ch == '_' && s[k - 1].isLetterOrDigit() && next != null && next.isLetterOrDigit()
+                when {
+                    intraword || (prevSpace && nextSpace) -> Unit
+                    nextSpace -> if (depth == 0) return true else depth-- // can only close
+                    prevSpace -> depth++ // can only open
+                    else -> if (depth > 0) depth-- else depth++ // both
+                }
+            }
+            k += run
+        }
+        return false
     }
 
     /** For "***" at [i] closed as "**" then "*": positions of the "**" and the final "*". */

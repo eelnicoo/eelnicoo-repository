@@ -179,4 +179,51 @@ class MarkdownParserTest {
         assertEquals(Inline.Text(" y "), inl[1])
         assertEquals(Inline.Bold(listOf(Inline.Text("no"))), inl[2])
     }
+
+    @Test fun boldUnitsWithInnerDelimitersAreKept() {
+        val a = MarkdownParser.parseInline("En Python, x ** 2 eleva al cuadrado; el patrón es **tests/*.py**.")
+        assertTrue(a.contains(Inline.Bold(listOf(Inline.Text("tests/*.py")))))
+        assertTrue(MarkdownParser.parseInline("Calcula x ** 2 y **x*y**.").contains(Inline.Bold(listOf(Inline.Text("x*y")))))
+        val b = MarkdownParser.parseInline("_Nota: __max_tokens__ es obligatorio._").single() as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Text("max_tokens"))), b.children[1])
+        val c = MarkdownParser.parseInline("*Edit **src/*.kt** only*").single() as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Text("src/*.kt"))), c.children[1])
+        val d = MarkdownParser.parseInline("_Nota: la variable __my_var__ es global_").single() as Inline.Italic
+        assertEquals(Inline.Bold(listOf(Inline.Text("my_var"))), d.children[1])
+    }
+
+    @Test fun adversarialDelimiterInputsStayFast() {
+        val inputs = listOf(
+            " *x".repeat(800) + " " + "**a * * ".repeat(800) + " * b**",
+            "*".repeat(4000),
+            "_a".repeat(3000),
+            "**a ".repeat(2000),
+        )
+        for (t in inputs) {
+            val start = System.nanoTime()
+            MarkdownParser.parseInline(t)
+            MarkdownParser.parse(t)
+            val ms = (System.nanoTime() - start) / 1_000_000
+            assertTrue("took ${'$'}ms ms for input of length ${'$'}{t.length}", ms < 1500)
+        }
+    }
+
+    @Test fun longRuleLinesAndHeadingsAreHandledWithoutRegexRecursion() {
+        assertEquals(MdBlock.Rule, MarkdownParser.parse("-".repeat(20000))[0])
+        assertEquals(MdBlock.Rule, MarkdownParser.parse("* ".repeat(10000))[0])
+        assertEquals(MdBlock.Rule, MarkdownParser.parse("___")[0])
+        assertTrue(MarkdownParser.parse("--x")[0] is MdBlock.Paragraph)
+        assertEquals(MdBlock.Heading(3, listOf(Inline.Text("A"))), MarkdownParser.parse("### A ###")[0])
+        assertTrue(MarkdownParser.parse("####### siete")[0] is MdBlock.Paragraph)
+        val wide = "|" + "a|".repeat(3000) + "\n|" + "-|".repeat(3000)
+        assertTrue(MarkdownParser.parse(wide)[0] is MdBlock.Table)
+    }
+
+    @Test fun highlighterSurvivesHugeLiterals() {
+        val h = io.github.eelnicoo.pocketcode.markdown.CodeHighlighter
+        val big = "val s = \"" + "a".repeat(200_000) + "\""
+        assertTrue(h.highlight(big, "kotlin").any { it.kind == io.github.eelnicoo.pocketcode.markdown.TokenKind.STRING })
+        h.highlight("x = \"" + "\\\\n".repeat(30_000) + "\"", "python")
+        h.highlight("{\"" + "k".repeat(100_000) + "\": 1}", "json")
+    }
 }

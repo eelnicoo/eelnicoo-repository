@@ -74,15 +74,66 @@ object CodeHighlighter {
 
     private val hashComment = setOf("python", "py", "bash", "sh", "shell", "zsh", "console", "yaml", "yml", "toml", "ruby", "rb")
 
-    private val stringRe = Regex("\"\"\"[\\s\\S]*?\"\"\"|\"(?:\\\\.|[^\"\\\\\\n])*\"|'(?:\\\\.|[^'\\\\\\n])*'|`(?:\\\\.|[^`\\\\])*`")
     private val numberRe = Regex("\\b(0x[0-9a-fA-F_]+|\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?[fFLlu]?)\\b")
     private val wordRe = Regex("[A-Za-z_][A-Za-z0-9_]*")
     private val annotationRe = Regex("@[A-Za-z_][A-Za-z0-9_.]*")
     private val tagRe = Regex("</?[A-Za-z][A-Za-z0-9:_.-]*|/?>")
     private val attrRe = Regex("\\b[A-Za-z_:][A-Za-z0-9_:.-]*(?==)")
-    private val jsonKeyRe = Regex("\"(?:\\\\.|[^\"\\\\])*\"(?=\\s*:)")
 
     private val MARKUP = setOf("xml", "html", "svg", "manifest", "json", "jsonc")
+
+    private fun lineEnd(code: String, from: Int): Int = code.indexOf('\n', from).let { if (it < 0) code.length else it }
+
+    /**
+     * Strings and comments, found by a single linear scan (no regex: java.util.regex recurses
+     * on repeated groups, and a long literal could overflow the stack). Scanning in order also
+     * means quotes inside comments and comment markers inside strings are handled right.
+     */
+    private fun scanLiterals(code: String, hash: Boolean, cLike: Boolean, xml: Boolean, singleQuote: Boolean, backtick: Boolean): List<Token> {
+        val out = ArrayList<Token>()
+        val n = code.length
+        var i = 0
+        while (i < n) {
+            val c = code[i]
+            when {
+                xml && code.startsWith("<!--", i) -> {
+                    val end = code.indexOf("-->", i + 4).let { if (it < 0) n else it + 3 }
+                    out.add(Token(i, end, TokenKind.COMMENT)); i = end
+                }
+                cLike && code.startsWith("//", i) -> {
+                    val end = lineEnd(code, i)
+                    out.add(Token(i, end, TokenKind.COMMENT)); i = end
+                }
+                cLike && code.startsWith("/*", i) -> {
+                    val end = code.indexOf("*/", i + 2).let { if (it < 0) n else it + 2 }
+                    out.add(Token(i, end, TokenKind.COMMENT)); i = end
+                }
+                hash && c == '#' && (i == 0 || code[i - 1].isWhitespace()) -> {
+                    val end = lineEnd(code, i)
+                    out.add(Token(i, end, TokenKind.COMMENT)); i = end
+                }
+                !xml && code.startsWith("\"\"\"", i) -> {
+                    val end = code.indexOf("\"\"\"", i + 3).let { if (it < 0) n else it + 3 }
+                    out.add(Token(i, end, TokenKind.STRING)); i = end
+                }
+                c == '"' || (singleQuote && c == '\'') || (backtick && c == '`') -> {
+                    val multiline = xml || c == '`'
+                    var j = i + 1
+                    while (j < n) {
+                        val d = code[j]
+                        if (d == '\\' && !xml) { j += 2; continue }
+                        if (d == c) { j++; break }
+                        if (d == '\n' && !multiline) break
+                        j++
+                    }
+                    val end = minOf(j, n)
+                    out.add(Token(i, end, TokenKind.STRING)); i = end
+                }
+                else -> i++
+            }
+        }
+        return out
+    }
 
     fun highlight(code: String, lang: String): List<Token> {
         val l = lang.lowercase().trim()
@@ -100,29 +151,31 @@ object CodeHighlighter {
 
         when (l) {
             "xml", "html", "svg", "manifest" -> {
-                Regex("<!--[\\s\\S]*?-->").findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.COMMENT) }
-                stringRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.STRING) }
+                scanLiterals(code, hash = false, cLike = false, xml = true, singleQuote = true, backtick = false)
+                    .forEach { add(it.start, it.end, it.kind) }
                 tagRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.TAG) }
                 attrRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ATTR) }
                 return tokens.sortedBy { it.start }
             }
             "json", "jsonc" -> {
-                jsonKeyRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ATTR) }
-                stringRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.STRING) }
+                scanLiterals(code, hash = false, cLike = l == "jsonc", xml = false, singleQuote = false, backtick = false).forEach { t ->
+                    // A string followed by ':' is an object key.
+                    var k = t.end
+                    while (k < code.length && (code[k] == ' ' || code[k] == '\t')) k++
+                    val kind = if (t.kind == TokenKind.STRING && k < code.length && code[k] == ':') TokenKind.ATTR else t.kind
+                    add(t.start, t.end, kind)
+                }
                 numberRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.NUMBER) }
                 Regex("\\b(true|false|null)\\b").findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.KEYWORD) }
                 return tokens.sortedBy { it.start }
             }
         }
 
-        // Comments first so strings/keywords inside them are not highlighted.
-        val commentRe = if (l in hashComment) Regex("(?<![^\\s])#[^\\n]*") else Regex("//[^\\n]*|/\\*[\\s\\S]*?\\*/")
-        // Strings take priority over comment markers inside them, so resolve by position.
-        val events = (commentRe.findAll(code).map { it to TokenKind.COMMENT } + stringRe.findAll(code).map { it to TokenKind.STRING })
-            .sortedBy { it.first.range.first }
-        for ((m, kind) in events) add(m.range.first, m.range.last + 1, kind)
+        val hash = l in hashComment
+        scanLiterals(code, hash = hash, cLike = !hash, xml = false, singleQuote = true, backtick = l in setOf("js", "javascript", "ts", "typescript", "jsx", "tsx", "go", "bash", "sh", "shell", "zsh", "kotlin", "kt"))
+            .forEach { add(it.start, it.end, it.kind) }
 
-        if (l !in hashComment) annotationRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ANNOTATION) }
+        if (!hash) annotationRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.ANNOTATION) }
         numberRe.findAll(code).forEach { add(it.range.first, it.range.last + 1, TokenKind.NUMBER) }
 
         val keywords = KEYWORDS[l].orEmpty()

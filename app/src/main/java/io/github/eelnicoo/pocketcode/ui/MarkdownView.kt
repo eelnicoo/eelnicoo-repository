@@ -75,7 +75,7 @@ fun MarkdownView(
     /** True while the text is still arriving: skip expensive work that would redo every tick. */
     streaming: Boolean = false,
 ) {
-    val blocks = remember(markdown) { MarkdownParser.parse(markdown) }
+    val blocks = remember(markdown) { safeParse(markdown) }
     val base = TextStyle(color = color, fontFamily = fontFamily, fontSize = fontSize, lineHeight = fontSize * 1.55f)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -231,7 +231,9 @@ fun CodeBlockView(lang: String, code: String, colorize: Boolean = true) {
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
     // While the block is still streaming it is shown plain; it is coloured once closed.
-    val highlighted = remember(code, lang, c, colorize) { if (colorize) highlight(code, lang, c) else AnnotatedString(code) }
+    val highlighted = remember(code, lang, c, colorize) {
+        if (colorize) runCatchingRender { highlight(code, lang, c) } ?: AnnotatedString(code) else AnnotatedString(code)
+    }
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier
@@ -276,6 +278,21 @@ fun CodeBlockView(lang: String, code: String, colorize: Boolean = true) {
                 .padding(12.dp),
         )
     }
+}
+
+/**
+ * Rendering must never take the app down: if parsing fails on some pathological input
+ * (deep recursion, a parser bug), show the text as a plain paragraph instead.
+ */
+private fun safeParse(markdown: String): List<MdBlock> =
+    runCatchingRender { MarkdownParser.parse(markdown) } ?: listOf(MdBlock.Paragraph(listOf(Inline.Text(markdown))))
+
+private inline fun <T> runCatchingRender(block: () -> T): T? = try {
+    block()
+} catch (e: StackOverflowError) {
+    null
+} catch (e: RuntimeException) {
+    null
 }
 
 private fun highlight(code: String, lang: String, c: ClaudeColors): AnnotatedString = buildAnnotatedString {
