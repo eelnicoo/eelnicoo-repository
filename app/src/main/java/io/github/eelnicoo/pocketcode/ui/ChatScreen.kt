@@ -1,408 +1,403 @@
 package io.github.eelnicoo.pocketcode.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.AddComment
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.eelnicoo.pocketcode.api.History
+import io.github.eelnicoo.pocketcode.chat.AssistantRow
+import io.github.eelnicoo.pocketcode.chat.ChatRows
+import io.github.eelnicoo.pocketcode.chat.UserRow
+import io.github.eelnicoo.pocketcode.data.Settings
+import kotlinx.coroutines.launch
+import java.util.Calendar
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: AgentViewModel, onOpenSettings: () -> Unit) {
-    val items by vm.items.collectAsStateWithLifecycle()
-    val busy by vm.busy.collectAsStateWithLifecycle()
-    val state by vm.settingsState.collectAsStateWithLifecycle()
-    var input by remember { mutableStateOf("") }
+fun ChatScreen(vm: ChatViewModel, onOpenSettings: () -> Unit) {
+    val c = LocalClaude.current
+    val state by vm.state.collectAsStateWithLifecycle()
+    val settings by vm.settingsState.collectAsStateWithLifecycle()
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
     val listState = rememberLazyListState()
+    var showModels by remember { mutableStateOf(false) }
 
-    LaunchedEffect(items.size, busy) {
-        if (items.isNotEmpty()) listState.animateScrollToItem(items.size)
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { vm.addImage(it) }
+    }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { vm.addFile(it) }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopAppBar(
-            title = {
-                Column {
-                    Text("Claude Code", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    Text(
-                        state.model.removePrefix("claude-"),
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val rows = remember(state.messages, state.draft, state.runningTools, state.busy) {
+        ChatRows.build(state.messages, state.draft, state.runningTools, state.busy)
+    }
+
+    BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
+    BackHandler(enabled = !drawer.isOpen && state.editingIndex != null) { vm.cancelEdit() }
+
+    // Jump to the newest message whenever a new row appears.
+    LaunchedEffect(rows.size, state.chatId) {
+        if (rows.isNotEmpty()) listState.scrollToItem(0)
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = c.drawer,
+                drawerShape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),
+                windowInsets = WindowInsets.systemBars,
+            ) {
+                HistoryDrawer(
+                    chats = state.chats,
+                    currentId = state.chatId,
+                    displayName = settings.displayName,
+                    loggedIn = settings.loggedIn,
+                    onNewChat = { vm.newChat(); scope.launch { drawer.close() } },
+                    onOpen = { vm.openChat(it); scope.launch { drawer.close() } },
+                    onRename = vm::renameChat,
+                    onToggleStar = vm::toggleStar,
+                    onDelete = vm::deleteChat,
+                    onSettings = { scope.launch { drawer.close() }; onOpenSettings() },
+                )
+            }
+        },
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(c.background)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding(),
+        ) {
+            TopBar(
+                title = if (state.chatId == null) "" else state.title,
+                starred = state.starred,
+                hasChat = state.chatId != null,
+                onMenu = { focus.clearFocus(); scope.launch { drawer.open() } },
+                onNewChat = { vm.newChat() },
+                onRename = { t -> state.chatId?.let { vm.renameChat(it, t) } },
+                onToggleStar = { state.chatId?.let { vm.toggleStar(it) } },
+                onDelete = { state.chatId?.let { vm.deleteChat(it) } },
+            )
+
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                if (rows.isEmpty()) {
+                    Greeting(
+                        name = settings.displayName,
+                        loggedIn = settings.loggedIn,
+                        onSuggestion = { vm.setComposerText(it) },
+                        onOpenSettings = onOpenSettings,
+                    )
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        reverseLayout = true,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp, Alignment.Top),
+                    ) {
+                        items(rows.asReversed(), key = { it.key }) { row ->
+                            when (row) {
+                                is UserRow -> UserMessage(row, canEdit = !state.busy) { vm.startEdit(it) }
+                                is AssistantRow -> AssistantTurn(row, onRetry = { vm.retry() })
+                            }
+                        }
+                    }
+                    val showJump by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 400 } }
+                    JumpToBottom(
+                        visible = showJump,
+                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
                     )
                 }
-            },
-            navigationIcon = {
-                Box(
-                    Modifier.padding(start = 12.dp).size(30.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Text(">_", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 13.sp) }
-            },
-            actions = {
-                IconButton(onClick = { vm.clear() }) {
-                    Icon(Icons.Outlined.AddComment, contentDescription = "Nuevo chat")
+                state.notice?.let { notice ->
+                    NoticeBar(
+                        text = notice,
+                        canRetry = !state.busy && state.messages.lastOrNull()?.let { History.isHumanTurn(it) } == true,
+                        onRetry = { vm.retry() },
+                        onDismiss = { vm.dismissNotice() },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Ajustes")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-            ),
-        )
-
-        if (items.isEmpty()) {
-            WelcomeState(
-                loggedIn = state.loggedIn,
-                onSuggestion = { input = it },
-                onOpenSettings = onOpenSettings,
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                items(items) { item -> MessageItem(item) }
-                if (busy) item { TypingIndicator() }
             }
-        }
 
-        InputBar(
-            value = input,
-            onValueChange = { input = it },
-            enabled = state.loggedIn && !busy,
-            onSend = { vm.send(input); input = "" },
+            Composer(
+                text = state.composerText,
+                onTextChange = vm::setComposerText,
+                attachments = state.attachments,
+                attaching = state.attaching,
+                onRemoveAttachment = vm::removeAttachment,
+                busy = state.busy,
+                loggedIn = settings.loggedIn,
+                editing = state.editingIndex != null,
+                onCancelEdit = vm::cancelEdit,
+                modelName = Settings.modelInfo(settings.model).name,
+                onModelClick = { focus.clearFocus(); showModels = true },
+                onPickImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onPickFile = { pickFile.launch(arrayOf("text/*", "application/pdf", "application/json", "application/xml", "image/*", "*/*")) },
+                onSend = { vm.send(); scope.launch { if (rows.isNotEmpty()) listState.scrollToItem(0) } },
+                onStop = vm::stop,
+            )
+        }
+    }
+
+    if (showModels) {
+        ModelSheet(
+            current = settings.model,
+            extendedThinking = settings.extendedThinking,
+            onSelect = vm::setModel,
+            onThinking = vm::setExtendedThinking,
+            onDismiss = { showModels = false },
         )
     }
 }
 
 @Composable
-private fun WelcomeState(
-    loggedIn: Boolean,
-    onSuggestion: (String) -> Unit,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun JumpToBottom(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalClaude.current
+    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(c.composer)
+                .border(1.dp, c.border, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Filled.ArrowDownward, "Ir al final", tint = c.textSecondary, modifier = Modifier.size(18.dp)) }
+    }
+}
+
+@Composable
+private fun TopBar(
+    title: String,
+    starred: Boolean,
+    hasChat: Boolean,
+    onMenu: () -> Unit,
+    onNewChat: () -> Unit,
+    onRename: (String) -> Unit,
+    onToggleStar: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+    val c = LocalClaude.current
+    var menu by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, "Historial", tint = c.text) }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            if (hasChat) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(10.dp)).clickable { menu = true }.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(title, color = c.text, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Icon(Icons.Filled.KeyboardArrowDown, null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (starred) "Quitar de destacados" else "Destacar") },
+                        leadingIcon = { Icon(if (starred) Icons.Outlined.StarOutline else Icons.Filled.Star, null) },
+                        onClick = { menu = false; onToggleStar() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Renombrar") },
+                        leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) },
+                        onClick = { menu = false; renaming = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Eliminar", color = c.danger) },
+                        leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = c.danger) },
+                        onClick = { menu = false; deleting = true },
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onNewChat) { Icon(Icons.Outlined.AddComment, "Nuevo chat", tint = c.text) }
+    }
+    if (renaming) {
+        var text by remember { mutableStateOf(title) }
+        AlertDialog(
+            onDismissRequest = { renaming = false },
+            title = { Text("Renombrar chat") },
+            text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { onRename(text); renaming = false }, enabled = text.isNotBlank()) { Text("Guardar") } },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancelar") } },
+            containerColor = c.composer,
+        )
+    }
+    if (deleting) {
+        AlertDialog(
+            onDismissRequest = { deleting = false },
+            title = { Text("¿Eliminar chat?") },
+            text = { Text("Se borrará de este dispositivo.") },
+            confirmButton = { TextButton(onClick = { onDelete(); deleting = false }) { Text("Eliminar", color = c.danger) } },
+            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancelar") } },
+            containerColor = c.composer,
+        )
+    }
+}
+
+@Composable
+private fun Greeting(name: String, loggedIn: Boolean, onSuggestion: (String) -> Unit, onOpenSettings: () -> Unit) {
+    val c = LocalClaude.current
+    val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val hello = when (hour) {
+        in 6..11 -> "Buenos días"
+        in 12..20 -> "Buenas tardes"
+        else -> "Buenas noches"
+    }
+    val first = name.trim().split(" ").firstOrNull().orEmpty()
     Column(
-        modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            Modifier.size(64.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(18.dp)),
-            contentAlignment = Alignment.Center,
-        ) { Text(">_", color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 26.sp) }
-        Spacer(Modifier.size(16.dp))
-        Text("Claude Code en tu bolsillo", fontSize = 20.sp, fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.size(6.dp))
-        Text(
-            if (loggedIn) "Pídeme que lea, escriba o edite archivos, ejecute comandos o construya APKs."
-            else "Inicia sesión con tu cuenta Claude para empezar.",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-        Spacer(Modifier.size(20.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ClaudeSpark(size = 34.dp)
+            Spacer(Modifier.size(12.dp))
+            Text(
+                if (first.isNotEmpty()) "$hello, $first" else hello,
+                fontFamily = FontFamily.Serif, fontSize = 30.sp, color = c.text, textAlign = TextAlign.Center,
+            )
+        }
+        Spacer(Modifier.size(28.dp))
         if (loggedIn) {
-            SUGGESTIONS.forEach { s ->
-                SuggestionChip(s) { onSuggestion(s) }
-                Spacer(Modifier.size(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Suggestion(Icons.Outlined.Code, "Código") { onSuggestion("Ayúdame a escribir un script que ") }
+                Suggestion(Icons.Outlined.Folder, "Archivos") { onSuggestion("Lista los archivos de mi directorio de trabajo y resúmelos") }
+                Suggestion(Icons.Outlined.PhoneAndroid, "Mi móvil") { onSuggestion("Dime información de mi dispositivo: modelo, versión de Android y almacenamiento libre") }
+                Suggestion(Icons.Outlined.Android, "Crear APK") { onSuggestion("Quiero crear una app Android sencilla que ") }
             }
         } else {
-            Surface(
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.clickable { onOpenSettings() },
-            ) {
-                Text("Ir a Ajustes para iniciar sesión", color = Color.White,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SuggestionChip(text: String, onClick: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-    ) {
-        Text(text, modifier = Modifier.padding(14.dp), fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun MessageItem(item: UiItem) {
-    when (item) {
-        is UiItem.User -> UserBubble(item.text)
-        is UiItem.Assistant -> AssistantBlock(item.text)
-        is UiItem.Thinking -> Unit
-        is UiItem.Notice -> NoticeCard(item.text)
-        is UiItem.ToolCall -> ToolCard(item)
-    }
-}
-
-@Composable
-private fun UserBubble(text: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp),
-            modifier = Modifier.widthIn(max = 320.dp),
-        ) {
-            Text(text, Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 15.sp)
-        }
-    }
-}
-
-@Composable
-private fun AssistantBlock(text: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Box(
-            Modifier.size(24.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Text("C", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-        Spacer(Modifier.size(10.dp))
-        MarkdownText(
-            markdown = text.ifBlank { "…" },
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun NoticeCard(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(text, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun ToolCard(item: UiItem.ToolCall) {
-    var expanded by remember { mutableStateOf(false) }
-    val running = item.output == null
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-            .clickable { expanded = !expanded },
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(toolIcon(item.name), contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                when {
-                    running -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    item.error -> Icon(Icons.Default.ErrorOutline, null,
-                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                    else -> Icon(Icons.Default.Check, null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                }
-                Spacer(Modifier.size(4.dp))
-                Icon(Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp))
-            }
-            if (!expanded) {
-                Text(
-                    item.input.replace("\n", " "),
-                    fontFamily = FontFamily.Monospace, fontSize = 11.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column {
-                    Text("entrada", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp))
-                    Text(item.input, style = CodeStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    val out = item.output
-                    if (out != null) {
-                        Text("salida", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 8.dp))
-                        Text(
-                            out, style = CodeStyle,
-                            color = if (item.error) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TypingIndicator() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(24.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Text("C", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-        Spacer(Modifier.size(10.dp))
-        val transition = rememberInfiniteTransition(label = "typing")
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            repeat(3) { i ->
-                val a by transition.animateFloat(
-                    initialValue = 0.3f, targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        tween(600, delayMillis = i * 150), RepeatMode.Reverse),
-                    label = "dot$i",
-                )
-                Box(
-                    Modifier.size(7.dp).alpha(a)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape),
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InputBar(value: String, onValueChange: (String) -> Unit, enabled: Boolean, onSend: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Mensaje a Claude…") },
-                enabled = enabled,
-                maxLines = 6,
-                shape = RoundedCornerShape(22.dp),
-                keyboardOptions = KeyboardOptions.Default,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    disabledContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                ),
+            Text(
+                "Inicia sesión con tu cuenta Claude para empezar",
+                color = c.textSecondary, fontSize = 15.sp, textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.size(8.dp))
-            val canSend = enabled && value.isNotBlank()
+            Spacer(Modifier.size(14.dp))
             Box(
-                Modifier
-                    .size(48.dp)
-                    .background(
-                        if (canSend) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        CircleShape,
-                    )
-                    .clickable(enabled = canSend, onClick = onSend),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Enviar",
-                    tint = if (canSend) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                Modifier.clip(RoundedCornerShape(12.dp)).background(c.accent).clickable(onClick = onOpenSettings)
+                    .padding(horizontal = 18.dp, vertical = 11.dp),
+            ) { Text("Iniciar sesión", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Medium) }
         }
     }
 }
 
-private fun toolIcon(name: String): ImageVector = when (name) {
-    "read_file" -> Icons.Default.Description
-    "write_file" -> Icons.Default.Edit
-    "edit_file" -> Icons.Default.Edit
-    "list_dir" -> Icons.Default.Folder
-    "grep" -> Icons.Default.Search
-    "run_shell" -> Icons.Default.Terminal
-    "build_apk" -> Icons.Default.Android
-    else -> Icons.Default.Code
+@Composable
+private fun Suggestion(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val c = LocalClaude.current
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, c.border, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = c.textSecondary, modifier = Modifier.size(17.dp))
+        Text("  $label", color = c.textSecondary, fontSize = 14.sp)
+    }
 }
 
-private val SUGGESTIONS = listOf(
-    "Lista los archivos del directorio de trabajo",
-    "Crea un archivo hola.txt con un saludo",
-    "¿Qué herramientas tienes disponibles?",
-    "Ejecuta: uname -a",
-)
+@Composable
+private fun NoticeBar(text: String, canRetry: Boolean, onRetry: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalClaude.current
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(c.composer)
+            .border(1.dp, c.danger.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .padding(start = 14.dp, top = 6.dp, bottom = 6.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 4, overflow = TextOverflow.Ellipsis)
+        if (canRetry) {
+            TextButton(onClick = { onDismiss(); onRetry() }) { Text("Reintentar", color = c.accent) }
+        }
+        IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+            Icon(Icons.Filled.Close, "Cerrar", tint = c.textTertiary, modifier = Modifier.size(18.dp))
+        }
+    }
+}

@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.eelnicoo.pocketcode"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -116,4 +116,6 @@ dependencies {
     implementation("com.android.tools.build:apksig:8.7.3")
     // Bundled compiler (ECJ) + dexer (D8/R8) jars live in app/libs and run on-device.
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+
+    testImplementation("junit:junit:4.13.2")
 }

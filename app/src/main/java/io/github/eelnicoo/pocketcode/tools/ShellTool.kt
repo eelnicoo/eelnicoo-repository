@@ -44,35 +44,62 @@ class ShellTool(
                     .redirectErrorStream(true)
                     .start()
             }
-            val output = StringBuilder()
-            val reader = proc.inputStream.bufferedReader()
-            val errReader = if (shizuku) proc.errorStream.bufferedReader() else null
-            val finished = waitForWithTimeout(proc, timeout)
-            output.append(reader.readText())
-            errReader?.let { output.append(it.readText()) }
+            // Drain stdout/stderr while the command runs; otherwise a chatty command fills
+            // the pipe buffer, blocks, and never exits.
+            val output = StringBuffer()
+            val readers = buildList {
+                add(drain(proc.inputStream, output))
+                if (shizuku) add(drain(proc.errorStream, output))
+            }
+            val finished = waitFor(proc, timeout)
+            if (!finished) proc.destroy()
+            readers.forEach { it.join(2000) }
             val label = if (shizuku) "[shizuku]" else "[sandbox]"
             if (!finished) {
-                proc.destroy()
                 return@withContext ToolResult("$label timeout tras ${timeout}s\n$output", true)
             }
             val code = proc.exitValue()
             val head = "$label exit=$code\n"
-            ToolResult(head + output.toString().take(60_000), isError = code != 0)
+            ToolResult(head + output.toString(), isError = code != 0)
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            throw c
         } catch (t: Throwable) {
             ToolResult("Error ejecutando comando: ${t.message}", true)
         }
     }
 
-    private fun waitForWithTimeout(proc: Process, timeoutSec: Long): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutSec * 1000L
-        while (System.currentTimeMillis() < deadline) {
-            if (!proc.isAlive) return true
-            Thread.sleep(50)
+    private fun drain(stream: java.io.InputStream, out: StringBuffer): Thread =
+        kotlin.concurrent.thread(isDaemon = true, name = "shell-drain") {
+            runCatching {
+                stream.bufferedReader().use { r ->
+                    val buf = CharArray(8192)
+                    while (true) {
+                        val n = r.read(buf)
+                        if (n < 0) break
+                        if (out.length < MAX_OUTPUT) out.append(buf, 0, minOf(n, MAX_OUTPUT - out.length))
+                    }
+                }
+            }
         }
-        return !proc.isAlive
+
+    /** Polls until the process exits or the timeout passes; destroys it if cancelled. */
+    private suspend fun waitFor(proc: Process, timeoutSec: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutSec * 1000L
+        try {
+            while (System.currentTimeMillis() < deadline) {
+                if (!proc.isAlive) return true
+                kotlinx.coroutines.delay(50)
+            }
+            return !proc.isAlive
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            proc.destroy()
+            throw c
+        }
     }
 
     companion object {
+        private const val MAX_OUTPUT = 200_000
+
         fun shizukuReady(): Boolean = try {
             Shizuku.pingBinder() &&
                 !Shizuku.isPreV11() &&
