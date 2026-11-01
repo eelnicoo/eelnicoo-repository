@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fotograma de película con «play» y una flecha: MTS -> MP4 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M28,36h32a4,4 0,0 1,4 4v28a4,4 0,0 1,-4 4h-32a4,4 0,0 1,-4 -4v-28a4,4 0,0 1,4 -4z
+            M28,39.5h4v3h-4z M35,39.5h4v3h-4z M42,39.5h4v3h-4z M49,39.5h4v3h-4z M56,39.5h4v3h-4z
+            M28,65.5h4v3h-4z M35,65.5h4v3h-4z M42,65.5h4v3h-4z M49,65.5h4v3h-4z M56,65.5h4v3h-4z
+            M39,47v14l11,-7z" />
+    <path
+        android:fillColor="#7FD3FF"
+        android:pathData="M67,51.5h7v5h-7z M73,45l11,9l-11,9z" />
+</vector>

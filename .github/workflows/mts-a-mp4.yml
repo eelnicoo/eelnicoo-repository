@@ -1,0 +1,82 @@
+name: MTS a MP4 (APK)
+
+on:
+  push:
+    paths:
+      - "mts-a-mp4/**"
+      - ".github/workflows/mts-a-mp4.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mts-a-mp4-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: "28.2.13676358"
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mts-a-mp4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: NDK y CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Caché de FFmpeg
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: mts-a-mp4/native/ffmpeg-out/android-arm64
+          key: ffmpeg-android-arm64-${{ env.NDK_VERSION }}-${{ hashFiles('mts-a-mp4/native/build-ffmpeg.sh') }}
+
+      - name: Compilar FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: native/build-ffmpeg.sh android
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Preparar APK
+        id: apk
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p ../apk-out
+          SRC=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$SRC" "../apk-out/MTS-a-MP4-${VERSION}-sin-firmar.apk"
+          cd ../apk-out
+          sha256sum *.apk > SHA256SUMS.txt
+          echo "Compilado desde ${GITHUB_SHA} (${GITHUB_REF_NAME})" > LEEME.txt
+          ls -la
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mts-a-mp4-apk
+          path: apk-out/
+
+      - name: Publicar en la rama «apk»
+        working-directory: apk-out
+        run: |
+          git init -q -b apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "APK ${{ steps.apk.outputs.version }} desde ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk

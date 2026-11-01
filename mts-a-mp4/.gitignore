@@ -1,0 +1,16 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+captures/
+# FFmpeg se descarga y compila con native/build-ffmpeg.sh
+native/ffmpeg-build/
+native/ffmpeg-out/
+# La clave de firma nunca va al repositorio
+*.jks
+*.keystore
+*.p12
+keystore.properties
