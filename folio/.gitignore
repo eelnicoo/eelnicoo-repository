@@ -1,0 +1,4 @@
+build/
+folio.jks
+keystore.properties
+*.idsig
