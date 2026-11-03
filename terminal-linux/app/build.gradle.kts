@@ -24,8 +24,8 @@ android {
         // 34 y no más: con 35 Android obliga al modo borde a borde y limita los servicios
         // en primer plano de tipo dataSync, y con 34 proot ya funciona desde jniLibs.
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")

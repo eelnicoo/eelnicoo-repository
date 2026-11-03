@@ -44,6 +44,10 @@ done
 paso "Actualizando la lista de paquetes (apt update)"
 apt-get update || error "No se pudo descargar la lista de paquetes. Revisa la conexión a internet y abre otra pestaña para reintentarlo."
 
+# Si un intento anterior se cortó a medias, se termina antes de seguir.
+dpkg --configure -a >/dev/null 2>&1
+apt-get -y -f install >/dev/null 2>&1
+
 paso "Instalando sudo y herramientas básicas (tarda unos minutos)"
 apt-get install -y \
     sudo ca-certificates curl wget git nano less procps psmisc bash-completion \

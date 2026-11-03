@@ -19,7 +19,11 @@ class Linux(context: Context) {
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences("ajustes", Context.MODE_PRIVATE)
 
-    val base = File(app.filesDir, "linux")
+    // Ruta real (/data/data/…), no la que da Android (/data/user/0/…, que es un enlace):
+    // proot monta Ubuntu desde la ruta real y escribe PROOT_L2S_DIR tal cual dentro de los
+    // enlaces con los que simula los enlaces duros. Con /data/user/0 esos enlaces quedaban
+    // rotos dentro de Ubuntu y dpkg fallaba («error setting ownership… No such file»).
+    val base = File(app.filesDir.canonicalFile, "linux")
     val rootfs = File(base, "rootfs")
     private val tmp = File(base, "tmp")
     private val libDir = File(base, "lib")
