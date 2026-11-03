@@ -20,6 +20,9 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import android.widget.Toast
 import com.termux.terminal.TerminalEmulator
@@ -101,7 +104,7 @@ class TerminalService : Service() {
 
     override fun onDestroy() {
         observador?.stopWatching()
-        for (s in sesiones) s.finishIfRunning()
+        terminar(sesiones.toList())
         sesiones.clear()
         soltarWakeLock()
         super.onDestroy()
@@ -145,7 +148,7 @@ class TerminalService : Service() {
     fun tipo(s: TerminalSession) = tipos[s]
 
     fun cerrarSesion(s: TerminalSession) {
-        s.finishIfRunning()
+        terminar(listOf(s))
         sesiones.remove(s)
         tipos.remove(s)
         actualizarPrimerPlano()
@@ -153,7 +156,7 @@ class TerminalService : Service() {
     }
 
     fun salir() {
-        for (s in sesiones.toList()) s.finishIfRunning()
+        terminar(sesiones.toList())
         sesiones.clear()
         tipos.clear()
         instalador?.cancelado = true
@@ -269,16 +272,37 @@ class TerminalService : Service() {
 
     /** Borra Ubuntu (para reinstalarlo). Cierra antes todas las sesiones. */
     fun desinstalar(listo: () -> Unit) {
-        for (s in sesiones.toList()) s.finishIfRunning()
+        terminar(sesiones.toList())
         sesiones.clear()
         tipos.clear()
         observador?.stopWatching()
         observador = null
         actualizarPrimerPlano()
         Thread({
+            Thread.sleep(2500) // que proot y sus procesos terminen antes de borrar
             linux.delete()
             main.post(listo)
         }, "desinstalador").start()
+    }
+
+    /**
+     * Cierra sesiones. proot ignora SIGTERM y SIGHUP, y con SIGKILL dejaría los procesos de
+     * Ubuntu sueltos fuera de proot; con SIGQUIT los mata a todos antes de salir. Por si acaso,
+     * un poco después se manda SIGKILL a lo que siga vivo.
+     */
+    private fun terminar(lista: List<TerminalSession>) {
+        val vivas = lista.filter { it.isRunning }
+        if (vivas.isEmpty()) return
+        for (s in vivas) {
+            val pid = s.pid
+            if (pid > 0) {
+                try {
+                    Os.kill(pid, OsConstants.SIGQUIT)
+                } catch (_: ErrnoException) {
+                }
+            }
+        }
+        main.postDelayed({ vivas.forEach { it.finishIfRunning() } }, 1500)
     }
 
     // ------------------------------------------------------------ primer plano y notificación

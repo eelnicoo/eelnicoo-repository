@@ -93,11 +93,15 @@ class Linux(context: Context) {
      */
     fun prepare() {
         for (d in listOf(tmp, libDir, shm, File(rootfs, ".l2s"))) d.mkdirs()
-        val tallocLink = File(libDir, "libtalloc.so.2")
-        tallocLink.delete()
-        try {
-            Os.symlink(talloc.absolutePath, tallocLink.absolutePath)
-        } catch (_: ErrnoException) {
+        // Android solo instala archivos lib*.so: las librerías con versión en el nombre se
+        // enlazan aquí (libtalloc.so.2 -> nativeLibraryDir/libtalloc.so).
+        for ((nombre, real) in VERSIONADAS) {
+            val enlace = File(libDir, nombre)
+            enlace.delete()
+            try {
+                Os.symlink(File(nativeDir, real).absolutePath, enlace.absolutePath)
+            } catch (_: ErrnoException) {
+            }
         }
         writeFakeSysdata()
         installGuestFiles()
@@ -123,7 +127,7 @@ class Linux(context: Context) {
             "PROOT_TMP_DIR=${tmp.absolutePath}",
             "PROOT_LOADER=${loader.absolutePath}",
             "PROOT_L2S_DIR=${File(rootfs, ".l2s").absolutePath}",
-            "LD_LIBRARY_PATH=${libDir.absolutePath}",
+            "LD_LIBRARY_PATH=${libDir.absolutePath}:${nativeDir.absolutePath}",
         )
         if (loader32.isFile) env += "PROOT_LOADER_32=${loader32.absolutePath}"
         return env.toTypedArray()
@@ -276,6 +280,9 @@ class Linux(context: Context) {
         const val GUEST_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         const val GUEST_LIB = "/usr/local/lib/terminal-linux"
         const val OPEN_DIR = "var/lib/terminal-linux/abrir"
+
+        /** Librerías que proot pide con versión → nombre con el que van en el APK. */
+        private val VERSIONADAS = mapOf("libtalloc.so.2" to "libtalloc.so")
 
         private val CPU_ROWS = listOf(
             listOf(31, 0, 226, 12027, 82, 10, 4, 9, 0, 0),

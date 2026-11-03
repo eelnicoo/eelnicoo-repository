@@ -357,13 +357,16 @@ class MainActivity : Activity(), TerminalService.Oyente {
     private fun cerrar(sesion: TerminalSession) {
         val s = servicio ?: return
         val i = s.sesiones.indexOf(sesion)
+        val eraActual = sesion == actual
         s.cerrarSesion(sesion)
         if (s.sesiones.isEmpty()) {
             actual = null
             s.stopSelf()
             finish()
-        } else {
+        } else if (eraActual) {
             mostrarSesion(s.sesiones[(i - 1).coerceIn(0, s.sesiones.lastIndex)])
+        } else {
+            dibujarPestanas()
         }
     }
 
