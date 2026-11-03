@@ -1,0 +1,80 @@
+#!/bin/bash
+# instalar-claude: instala Claude Code en este Ubuntu.
+#
+# 1. Prueba el instalador oficial (https://claude.ai/install.sh).
+# 2. Si ese binario no arranca dentro de proot, instala Node.js y usa npm.
+#
+# Uso: instalar-claude [--npm]   (--npm salta directamente al paso 2)
+
+set -u
+verde() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
+amarillo() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
+rojo() { printf '\n\033[1;31m✗ %s\033[0m\n' "$*" >&2; }
+
+SUDO=sudo
+[ "$(id -u)" = 0 ] && SUDO=
+
+listo() {
+    verde "Claude Code está instalado: $("$1" --version 2>/dev/null | head -1)"
+    echo "Escribe «claude» para empezar. La primera vez se abrirá el navegador"
+    echo "de la tablet para iniciar sesión con tu cuenta de Claude."
+    exit 0
+}
+
+if [ "${1:-}" != "--npm" ]; then
+    verde "Instalando Claude Code con el instalador oficial"
+    if curl -fsSL https://claude.ai/install.sh | bash; then
+        if "$HOME/.local/bin/claude" --version >/dev/null 2>&1; then
+            listo "$HOME/.local/bin/claude"
+        fi
+    fi
+    amarillo "El instalador oficial no ha funcionado dentro de proot; pruebo con Node.js y npm."
+fi
+
+node_ok() {
+    command -v node >/dev/null 2>&1 &&
+        [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -ge 20 ]
+}
+
+if ! node_ok; then
+    verde "Instalando Node.js 22 (nodejs.org)"
+    case "$(dpkg --print-architecture)" in
+    arm64) arch=arm64 ;;
+    amd64) arch=x64 ;;
+    armhf) arch=armv7l ;;
+    *)
+        rojo "Arquitectura no soportada por Node.js: $(dpkg --print-architecture)"
+        exit 1
+        ;;
+    esac
+    base=https://nodejs.org/dist/latest-v22.x
+    archivo="$(curl -fsSL "$base/SHASUMS256.txt" | grep -o "node-v[0-9.]*-linux-$arch\.tar\.xz" | head -1)"
+    if [ -z "$archivo" ]; then
+        rojo "No encuentro Node.js para $arch. ¿Hay conexión a internet?"
+        exit 1
+    fi
+    tmp="$(mktemp -d)"
+    if ! curl -fL --progress-bar -o "$tmp/$archivo" "$base/$archivo" ||
+        ! (cd "$tmp" && curl -fsSL "$base/SHASUMS256.txt" | grep " $archivo\$" | sha256sum -c - >/dev/null); then
+        rojo "La descarga de Node.js ha fallado."
+        rm -rf "$tmp"
+        exit 1
+    fi
+    $SUDO tar -xJf "$tmp/$archivo" -C /usr/local --strip-components=1 \
+        --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md
+    rm -rf "$tmp"
+    hash -r
+fi
+
+if ! node_ok; then
+    rojo "Node.js no funciona en este sistema."
+    exit 1
+fi
+
+verde "Instalando Claude Code con npm"
+if $SUDO npm install -g @anthropic-ai/claude-code; then
+    hash -r
+    command -v claude >/dev/null 2>&1 && listo "$(command -v claude)"
+fi
+rojo "No se pudo instalar Claude Code. Revisa los mensajes de arriba."
+exit 1

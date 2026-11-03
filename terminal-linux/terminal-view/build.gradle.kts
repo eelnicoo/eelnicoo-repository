@@ -1,0 +1,24 @@
+// Vista de terminal de Termux (Apache 2.0, ver LICENSE). Copiada de
+// github.com/termux/termux-app v0.118.3; solo se añaden los textos en español.
+plugins {
+    id("com.android.library")
+}
+
+android {
+    namespace = "com.termux.view"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 24
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation("androidx.annotation:annotation:1.9.1")
+    api(project(":terminal-emulator"))
+}

@@ -1,0 +1,94 @@
+name: Terminal Linux (APK)
+
+on:
+  push:
+    paths:
+      - "terminal-linux/**"
+      - ".github/workflows/terminal-linux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: terminal-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: "28.2.13676358"
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: terminal-linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" "platforms;android-36" > /dev/null
+          echo "$ANDROID_HOME/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - name: proot y talloc (paquetes de Termux)
+        run: scripts/descargar-proot.sh
+
+      - name: Clave de firma (si está en los secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.TERMINAL_LINUX_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.TERMINAL_LINUX_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > firma/terminal-linux.p12
+            printf 'storeFile=terminal-linux.p12\nstorePassword=%s\nkeyAlias=terminal-linux\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > firma/keystore.properties
+            echo "El APK saldrá firmado"
+          else
+            echo "No hay clave en los secrets: el APK saldrá sin firmar (ver terminal-linux/firma/LEEME.md)"
+          fi
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Preparar APK
+        id: apk
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p ../apk-out
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "../apk-out/Terminal-Linux-${VERSION}.apk"
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "../apk-out/Terminal-Linux-${VERSION}-sin-firmar.apk"
+          fi
+          rm -f firma/terminal-linux.p12 firma/keystore.properties
+          cd ../apk-out
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs *.apk | head -5 || true
+          unzip -l *.apk | grep -E 'lib/|classes' || true
+          sha256sum *.apk > SHA256SUMS.txt
+          echo "Compilado desde ${GITHUB_SHA} (${GITHUB_REF_NAME})" > LEEME.txt
+          ls -la
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terminal-linux-apk
+          path: apk-out/
+
+      - name: Publicar en la rama «apk-terminal-linux»
+        working-directory: apk-out
+        run: |
+          git init -q -b apk-terminal-linux
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Terminal Linux ${{ steps.apk.outputs.version }} desde ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" apk-terminal-linux

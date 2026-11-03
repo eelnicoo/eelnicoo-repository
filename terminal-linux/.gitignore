@@ -1,0 +1,14 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+captures/
+# proot y talloc se descargan de los paquetes de Termux con scripts/descargar-proot.sh
+app/src/main/jniLibs/
+# La clave de firma nunca va al repositorio (ver firma/LEEME.md)
+firma/*.p12
+firma/*.jks
+firma/keystore.properties

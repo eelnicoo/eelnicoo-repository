@@ -1,0 +1,36 @@
+#!/bin/bash
+# abrir: abre archivos o direcciones web con las apps de Android
+# (navegador, visor de PDF, galería…). También funciona como «xdg-open»,
+# así que los programas que abren el navegador (por ejemplo «claude» al
+# iniciar sesión) lo hacen solos.
+#
+# Uso: abrir <archivo o URL>…
+
+DIR=/var/lib/terminal-linux/abrir
+
+if [ $# -eq 0 ]; then
+    echo "Uso: abrir <archivo o URL>…" >&2
+    exit 1
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+    *://* | mailto:* | tel:* | geo:* | intent:*)
+        objetivo="$arg"
+        ;;
+    *)
+        if [ ! -e "$arg" ]; then
+            echo "abrir: no existe: $arg" >&2
+            exit 1
+        fi
+        objetivo="$(readlink -f -- "$arg")"
+        ;;
+    esac
+    mkdir -p "$DIR" 2>/dev/null
+    tmp="$(mktemp "$DIR/.pedido.XXXXXX" 2>/dev/null)" || {
+        echo "abrir: no puedo escribir en $DIR" >&2
+        exit 1
+    }
+    printf '%s\n' "$objetivo" >"$tmp"
+    mv -f "$tmp" "$DIR/$(date +%s%N)-$$.pedido"
+done
