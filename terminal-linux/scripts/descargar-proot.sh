@@ -41,7 +41,7 @@ descargar_indice() { # <arch> <destino>
 }
 
 # Librerías de Android que ya están en el sistema.
-SISTEMA=" libc.so libdl.so libm.so liblog.so "
+SISTEMA=" libc.so libdl.so libm.so liblog.so libandroid.so libz.so libstdc++.so "
 
 for arch in aarch64 arm x86_64; do
     abi="${ABI[$arch]}"
