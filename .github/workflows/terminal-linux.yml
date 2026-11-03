@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "terminal-linux/**"
+      - "!terminal-linux/dist/**"
       - ".github/workflows/terminal-linux.yml"
   workflow_dispatch:
 
