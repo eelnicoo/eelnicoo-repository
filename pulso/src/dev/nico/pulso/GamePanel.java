@@ -339,8 +339,8 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             a.addView(spark, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             LinearLayout bcol = Ui.column(c);
             bcol.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP));
-            bcol.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (fpsSeg != null) bcol.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
+            // Sin el texto explicativo del modo: cambiaba de largo y movía todo el panel.
+            if (fpsSeg != null) bcol.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
             bcol.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
             cols.addView(a, Ui.lp(0, Ui.WRAP, 1.45f));
             LinearLayout.LayoutParams bp = Ui.lp(0, Ui.WRAP, 1f);
@@ -349,8 +349,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             col.addView(cols, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(2), 0, 0));
         } else {
             col.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
-            col.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (fpsSeg != null) col.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
+            if (fpsSeg != null) col.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
             col.addView(grid, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(spark, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap, 0, 0));
@@ -613,7 +612,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.2.0 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.2.1 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
