@@ -62,7 +62,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ModeSelector modes;
     private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
-    private ToggleTile gHud, gDnd, gBright, gAwake, gNight, gRam;
+    private ToggleTile gHud, gTouch, gBright, gAwake, gNight, gRam;
     private String pkg;
     private Mode mode = Mode.BALANCED;
     private float maxHz = 60f;
@@ -436,7 +436,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
     private View toggles(final Context c, int h) {
         gHud = new ToggleTile(c, R.drawable.ic_gauge, "HUD", h);
-        gDnd = new ToggleTile(c, R.drawable.ic_moon, "No molestar", h);
+        gTouch = new ToggleTile(c, R.drawable.ic_touch, "Mejora táctil", h);
         gBright = new ToggleTile(c, R.drawable.ic_sun, "Brillo fijo", h);
         gAwake = new ToggleTile(c, R.drawable.ic_cup, "No apagar", h);
         gNight = new ToggleTile(c, R.drawable.ic_night, "Modo noche", h);
@@ -458,23 +458,21 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 gAwake.setActive(on);
             }
         });
-        gDnd.setOnClickListener(new View.OnClickListener() {
+        gTouch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                boolean on = !gDnd.isActive();
-                if (Sys.setDnd(c, on)) {
-                    gDnd.setActive(on);
-                    main.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (open) gDnd.setActive(Sys.dndOn(c));
-                        }
-                    }, 700);
-                } else {
-                    close();
-                    Sys.open(c, new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
-                    Sys.toast(c, "Permite «No molestar» a Pulso");
+                if (!Shizuku.ready()) {
+                    Sys.toast(c, "La mejora táctil necesita Shizuku");
+                    return;
                 }
+                final boolean on = !gTouch.isActive();
+                gTouch.setActive(on);
+                Touch.set(c, on, new Runnable() {
+                    @Override
+                    public void run() {
+                        if (open) gTouch.setActive(Touch.on(c));
+                    }
+                });
             }
         });
         gBright.setOnClickListener(new View.OnClickListener() {
@@ -523,14 +521,15 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 });
             }
         });
-        return grid(c, new View[] {gHud, gDnd, gBright, gAwake, gNight, gRam}, 3);
+        return grid(c, new View[] {gHud, gTouch, gBright, gAwake, gNight, gRam}, 3);
     }
 
     private void refreshToggles() {
         if (!open || gHud == null) return;
         gHud.setActive(Prefs.hud(ctx));
         gAwake.setActive(Prefs.awake(ctx));
-        gDnd.setActive(Sys.dndOn(ctx));
+        gTouch.setActive(Touch.on(ctx));
+        gTouch.setAvailable(Shizuku.ready());
         gBright.setActive(!Sys.autoBrightness(ctx));
         boolean sz = Shizuku.ready();
         gNight.setAvailable(sz);
@@ -556,7 +555,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
     private void applyAccent(boolean animate) {
         root.setAccent(mode.c1, mode.c2, animate);
-        ToggleTile[] all = {gHud, gDnd, gBright, gAwake, gNight, gRam};
+        ToggleTile[] all = {gHud, gTouch, gBright, gAwake, gNight, gRam};
         for (ToggleTile t : all) t.setAccent(mode.c1, mode.c2);
         if (pkg == null) appIcon.setImageDrawable(badge(ctx));
     }
@@ -593,12 +592,13 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.0.5 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.0.6 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
                         + "echo '== gpu'; " + StatsEngine.GPU_PROBE + "; "
-                        + "for d in /sys/class/devfreq/*gpu*; do ls \"$d\"; cat \"$d/cur_freq\" \"$d/available_frequencies\" 2>/dev/null; done", 15000);
+                        + "for d in /sys/class/devfreq/*gpu*; do ls \"$d\"; cat \"$d/cur_freq\" \"$d/available_frequencies\" 2>/dev/null; done; "
+                        + "echo '== tacto'; settings list secure | grep -iE 'touch|protector'; settings list system | grep -iE 'touch|protector'", 15000);
                 final String text = out != null ? out : "Shizuku no respondió";
                 main.post(new Runnable() {
                     @Override

@@ -136,7 +136,10 @@ public class PulsoService extends Service
             hud.setVisible(false);
             handle.detach();
             stats.shutdown();
-            if (!Prefs.enabled(this)) ModeController.restore(this);
+            if (!Prefs.enabled(this)) {
+                ModeController.restore(this);
+                Touch.restore(this);
+            }
         }
         requestTileUpdate();
         super.onDestroy();

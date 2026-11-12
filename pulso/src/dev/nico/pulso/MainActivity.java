@@ -36,7 +36,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private ModeSelector modes;
     private TextView szStatus, szButton, szSteps;
     private View szDot;
-    private PermRow pOverlay, pNotif, pUsage, pDnd, pWrite;
+    private PermRow pOverlay, pNotif, pUsage, pWrite;
     private Segmented sideSeg, hudSeg;
     private Slider posSlider, sizeSlider, alphaSlider;
     private TextView posVal, sizeVal, alphaVal;
@@ -249,7 +249,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         pOverlay.set(overlay);
         pNotif.set(checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED);
         pUsage.set(Sys.usageAccess(this));
-        pDnd.set(Sys.dndAccess(this) || ready);
         pWrite.set(Settings.System.canWrite(this) || ready);
 
         sideSeg.select(Prefs.side(this), false);
@@ -400,7 +399,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 "Limitar de verdad a 60 FPS en Ahorro y fijar 120 Hz en Rendimiento",
                 "Leer la temperatura de la CPU y la GPU",
                 "Medir los FPS reales del juego",
-                "Modo noche y liberar RAM desde el panel",
+                "Mejora táctil, modo noche y liberar RAM desde el panel",
         };
         for (String s : items) card.addView(bullet(s));
 
@@ -419,8 +418,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         pNotif = new PermRow(card, R.drawable.ic_bell, "Notificaciones", "Aviso fijo con los modos, sin sonido", null);
         pUsage = new PermRow(card, R.drawable.ic_chart, "Acceso a uso", "Para mostrar el nombre del juego y avisarle del modo",
                 Sys.settings(this, Settings.ACTION_USAGE_ACCESS_SETTINGS, true));
-        pDnd = new PermRow(card, R.drawable.ic_moon, "No molestar", "Para el botón del panel (no hace falta con Shizuku)",
-                new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
         pWrite = new PermRow(card, R.drawable.ic_sun, "Modificar ajustes", "Para «Brillo fijo» (no hace falta con Shizuku)",
                 Sys.settings(this, Settings.ACTION_MANAGE_WRITE_SETTINGS, true));
         content.addView(card, cardLp());

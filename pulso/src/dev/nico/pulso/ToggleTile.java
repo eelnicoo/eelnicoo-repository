@@ -110,7 +110,14 @@ final class ToggleTile extends View {
 
         Ui.drawIcon(cv, icon, w / 2f, h * 0.40f, Ui.dpf(21), iconColor);
         labelP.setColor(flash != null ? Ui.TEXT : textColor);
-        cv.drawText(Ui.fit(labelP, flash != null ? flash : label, w - Ui.dpf(10)), w / 2f, h * 0.81f, labelP);
+        String text = flash != null ? flash : label;
+        float avail = w - Ui.dpf(10), size = Ui.dpf(10);
+        labelP.setTextSize(size);
+        while (labelP.measureText(text) > avail && size > Ui.dpf(8.5f)) {
+            size -= Ui.dpf(0.5f);
+            labelP.setTextSize(size);
+        }
+        cv.drawText(Ui.fit(labelP, text, avail), w / 2f, h * 0.81f, labelP);
 
         if (active) {
             dot.setColor(c1);
