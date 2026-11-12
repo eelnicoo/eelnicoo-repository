@@ -19,6 +19,8 @@ final class Prefs {
     static final String AWAKE = "awake";        // no apagar la pantalla
     static final String BOOT = "boot";
     static final String ECO_FPS = "eco_fps";    // límite de Eco: 30 o 60
+    static final String BAL_FPS = "bal_fps";    // límite de Equilibrado: 60 o 120 (lo del sistema)
+    static final String EDGE = "edge";          // borde de luz en Modo Gamer
     // Valores originales de la frecuencia, para dejarlo todo como estaba.
     static final String ORIG_SAVED = "orig_saved";
     static final String ORIG_PEAK = "orig_peak";
@@ -67,6 +69,14 @@ final class Prefs {
 
     static boolean awake(Context c) {
         return get(c).getBoolean(AWAKE, false);
+    }
+
+    static int balFps(Context c) {
+        return get(c).getInt(BAL_FPS, 120);
+    }
+
+    static boolean edge(Context c) {
+        return get(c).getBoolean(EDGE, true);
     }
 
     static int ecoFps(Context c) {

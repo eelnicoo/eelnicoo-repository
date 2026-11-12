@@ -60,7 +60,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ImageView appIcon;
     private TextView title, subtitle, clock, battery, modeDesc, hint;
     private ModeSelector modes;
-    private Segmented ecoSeg;
+    private Segmented fpsSeg;
     private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
     private ToggleTile gHud, gTouch, gBright, gAwake, gNight, gRam;
@@ -291,19 +291,21 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 // El servicio verá el cambio en los ajustes y llamará a onModeChanged().
             }
         });
-        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)), 11.5f, Ui.TEXT2, Ui.MEDIUM);
+        modeDesc = Ui.textDp(c, describe(mode), 11.5f, Ui.TEXT2, Ui.MEDIUM);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
-        // Límite de Eco a mano (solo donde bajar de 60 funciona: pantallas de más de 60 Hz).
-        ecoSeg = null;
+        // Límite de FPS del modo, a mano (solo donde funciona: pantallas de más de 60 Hz).
+        fpsSeg = null;
         if (maxHz >= 61f) {
-            ecoSeg = new Segmented(c, "Eco · 30 FPS", "Eco · 60 FPS").compact();
-            ecoSeg.select(Prefs.ecoFps(c) == 60 ? 1 : 0, false);
-            ecoSeg.setListener(new Segmented.Listener() {
+            fpsSeg = new Segmented(c, "", "").compact();
+            setupFpsSeg();
+            fpsSeg.setListener(new Segmented.Listener() {
                 @Override
                 public void onSelect(Segmented s, int index) {
-                    Prefs.put(ctx, Prefs.ECO_FPS, index == 1 ? 60 : 30);
-                    modeDesc.setText(mode.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)));
-                    if (mode == Mode.ECO) ModeController.select(ctx, Mode.ECO, pkg, false);
+                    if (mode == Mode.BALANCED) Prefs.put(ctx, Prefs.BAL_FPS, index == 0 ? 60 : 120);
+                    else if (mode == Mode.ECO) Prefs.put(ctx, Prefs.ECO_FPS, index == 1 ? 60 : 30);
+                    else return;
+                    modeDesc.setText(describe(mode));
+                    ModeController.select(ctx, mode, pkg, false);
                 }
             });
         }
@@ -338,7 +340,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             LinearLayout bcol = Ui.column(c);
             bcol.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP));
             bcol.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (ecoSeg != null) bcol.addView(ecoSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
+            if (fpsSeg != null) bcol.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             bcol.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
             cols.addView(a, Ui.lp(0, Ui.WRAP, 1.45f));
             LinearLayout.LayoutParams bp = Ui.lp(0, Ui.WRAP, 1f);
@@ -348,7 +350,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         } else {
             col.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (ecoSeg != null) col.addView(ecoSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
+            if (fpsSeg != null) col.addView(fpsSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(grid, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(spark, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap, 0, 0));
@@ -566,7 +568,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             });
         }
         hint.setVisibility(sz ? View.GONE : View.VISIBLE);
-        modeDesc.setText(mode.describe(sz, maxHz, Prefs.ecoFps(ctx)));
+        modeDesc.setText(describe(mode));
     }
 
     private void applyAccent(boolean animate) {
@@ -611,7 +613,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.1.2 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.2.0 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
@@ -642,11 +644,31 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
     // ---------------------------------------------------------------- cambios
 
+    private String describe(Mode m) {
+        return m.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx), Prefs.balFps(ctx));
+    }
+
+    /** El selector de FPS cambia según el modo: Gamer fijo, Equilibrado 60/120 y Eco 30/60. */
+    private void setupFpsSeg() {
+        if (fpsSeg == null) return;
+        if (mode == Mode.PERFORMANCE) {
+            fpsSeg.setItems(0, Ui.f0(maxHz) + " FPS fijos");
+            fpsSeg.setEnabled(false);
+        } else if (mode == Mode.BALANCED) {
+            fpsSeg.setItems(Prefs.balFps(ctx) == 60 ? 0 : 1, "60 FPS", Ui.f0(maxHz) + " FPS");
+            fpsSeg.setEnabled(true);
+        } else {
+            fpsSeg.setItems(Prefs.ecoFps(ctx) == 60 ? 1 : 0, "30 FPS", "60 FPS");
+            fpsSeg.setEnabled(true);
+        }
+    }
+
     void onModeChanged(Mode m) {
         if (!open || m == mode) return;
         mode = m;
+        setupFpsSeg();
         if (modes.mode() != m) modes.setMode(m, true);
-        modeDesc.setText(m.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)));
+        modeDesc.setText(describe(m));
         applyAccent(true);
         Stats last = svc.stats().last();
         if (last != null) onStats(last);

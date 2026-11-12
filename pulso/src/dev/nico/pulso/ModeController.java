@@ -29,7 +29,7 @@ final class ModeController {
             public void run() {
                 String pkg = gamePkg;
                 if (pkg == null && detect) pkg = Sys.foregroundPackage(app);
-                applyNow(app, m, pkg);
+                applyNow(app, m, pkg, false);
             }
         });
     }
@@ -40,22 +40,30 @@ final class ModeController {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                applyNow(app, m, null);
+                applyNow(app, m, null, false);
             }
         });
     }
 
     /** Deja la pantalla y los juegos como estaban (al apagar Pulso). */
     static void restore(Context c) {
-        apply(c, Mode.BALANCED);
+        final Context app = c.getApplicationContext();
+        Sys.BG.execute(new Runnable() {
+            @Override
+            public void run() {
+                applyNow(app, Mode.BALANCED, null, true);
+            }
+        });
     }
 
-    private static void applyNow(Context c, Mode m, String pkg) {
+    private static void applyNow(Context c, Mode m, String pkg, boolean restoreAll) {
         if (!Shizuku.ready()) return;
         SharedPreferences p = Prefs.get(c);
         StringBuilder cmd = new StringBuilder();
+        // Equilibrado a 60: como Eco, pero sin tocar el modo de juego. A 120 es lo del sistema.
+        boolean balanced60 = m == Mode.BALANCED && !restoreAll && Prefs.balFps(c) == 60 && Sys.maxRefresh(c) >= 61f;
 
-        if (m == Mode.BALANCED) {
+        if (m == Mode.BALANCED && !balanced60) {
             boolean saved = p.getBoolean(Prefs.ORIG_SAVED, false);
             Set<String> games = p.getStringSet(Prefs.GAMES, null);
             if (!saved && (games == null || games.isEmpty())) return;
@@ -96,12 +104,23 @@ final class ModeController {
         } else {
             // Desde Android 14, peak_refresh_rate también limita los FPS a los que dibuja el sistema:
             // a 30, los juegos van a 30 aunque el panel siga a 60 Hz.
-            int fps = Prefs.ecoFps(c);
+            int fps = m == Mode.BALANCED ? 60 : Prefs.ecoFps(c);
             cmd.append("settings put system peak_refresh_rate ").append(rate(fps)).append("; ");
             cmd.append("settings put system min_refresh_rate ").append(saverMin(p.getString(Prefs.ORIG_MIN, null), fps)).append("; ");
         }
 
-        if (pkg != null && Sys.PACKAGE_NAME.matcher(pkg).matches()) {
+        if (m == Mode.BALANCED) { // al pasar a Equilibrado, los juegos vuelven a su modo normal
+            Set<String> games = p.getStringSet(Prefs.GAMES, null);
+            if (games != null) {
+                for (String g : games) {
+                    if (Sys.PACKAGE_NAME.matcher(g).matches()) {
+                        cmd.append("cmd game reset ").append(g).append(" >/dev/null 2>&1; ");
+                        cmd.append("cmd game mode standard ").append(g).append(" >/dev/null 2>&1; ");
+                    }
+                }
+                p.edit().remove(Prefs.GAMES).apply();
+            }
+        } else if (pkg != null && Sys.PACKAGE_NAME.matcher(pkg).matches()) {
             // Límite de FPS solo para el juego (modo de juego de Android): sirve donde el ajuste
             // global no baja de los Hz de la pantalla (la tablet, con su panel fijo a 60 Hz).
             if (m.saving()) {

@@ -4,10 +4,10 @@ Panel de juego para el Pixel 10 con GrapheneOS, al estilo del de los realme GT.
 Deslizas desde el borde de la pantalla y aparece, encima del juego, un panel de cristal
 translúcido y desenfocado con:
 
-- **Tres modos**: Rendimiento, Equilibrado y Eco. Ninguno activa el ahorro de batería del sistema.
-  - **Rendimiento**: pantalla fija a la frecuencia máxima (120 Hz) y el juego en modo rendimiento
-    (API de modos de juego de Android).
-  - **Equilibrado**: lo que decida el sistema, sin tocar nada.
+- **Tres modos**: Modo Gamer, Equilibrado y Eco. Ninguno activa el ahorro de batería del sistema.
+  - **Modo Gamer**: pantalla fija a la frecuencia máxima (120 Hz), el juego en modo rendimiento
+    (API de modos de juego de Android) y un borde de luz de neón alrededor de la pantalla (se puede quitar).
+  - **Equilibrado**: lo que decida el sistema (hasta 120 FPS) o limitado a 60 FPS, a elegir.
   - **Eco**: juegos a **30 o 60 FPS** (a elegir en el panel) y el juego en modo batería, para que el procesador trabaje menos y baje
     de frecuencia (limitar los GHz directamente necesita root). En pantallas fijas a 60 Hz solo cambia el modo de juego.
 - **Datos en vivo**: temperatura de CPU, GPU y batería, FPS, consumo en vatios, RAM y estado térmico,
@@ -30,7 +30,7 @@ Pulso usa [Shizuku](https://shizuku.rikka.app/), que funciona sin root con la de
 | | Sin Shizuku | Con Shizuku |
 |---|---|---|
 | Límite de 30 FPS (Eco) | no | sí (peak_refresh_rate, el mismo ajuste que «Pantalla fluida») |
-| 120 Hz fijos (Rendimiento) | sí, mientras Pulso esté activo | sí, más el modo de juego en rendimiento |
+| 120 Hz fijos (Modo Gamer) | sí, mientras Pulso esté activo | sí, más el modo de juego en rendimiento |
 | Temperatura CPU / GPU | solo si el sistema deja leer `/sys` (normalmente no) | sí (HAL térmico) |
 | FPS reales | no (se muestra la frecuencia de la pantalla) | sí (contador de SurfaceFlinger) |
 | Batería, consumo, RAM, estado térmico | sí | sí |

@@ -1,8 +1,8 @@
 package dev.nico.pulso;
 
-/** Los tres modos del panel. Ninguno activa el ahorro de batería del sistema. */
+/** Los tres modos del panel (Modo Gamer, Equilibrado y Eco). Ninguno activa el ahorro de batería del sistema. */
 enum Mode {
-    PERFORMANCE("Rendimiento", R.drawable.ic_bolt, 0xFFFF8A3D, 0xFFFF2F6D),
+    PERFORMANCE("Modo Gamer", R.drawable.ic_gamepad, 0xFFFF8A3D, 0xFFFF2F6D),
     BALANCED("Equilibrado", R.drawable.ic_balance, 0xFF3FD7FF, 0xFF6D7CFF),
     ECO("Eco", R.drawable.ic_eco, 0xFFD8F56B, 0xFF86CF45);
 
@@ -35,7 +35,7 @@ enum Mode {
         return BALANCED;
     }
 
-    String describe(boolean shizuku, float maxHz, int ecoFps) {
+    String describe(boolean shizuku, float maxHz, int ecoFps, int balFps) {
         String hz = Ui.f0(maxHz);
         boolean fixed60 = maxHz < 61f; // pantalla fija a 60 Hz (p. ej. la Tab S7 FE)
         if (this == PERFORMANCE) {
@@ -50,6 +50,11 @@ enum Mode {
                     ? "Juegos a " + ecoFps + " FPS y el juego en modo batería: el procesador trabaja menos y baja de GHz. Sin el ahorro de batería."
                     : "Con Shizuku, limita los juegos a " + ecoFps + " FPS para que el procesador trabaje menos.";
         }
-        return "La frecuencia la decide el sistema, como siempre.";
+        if (!fixed60 && balFps == 60) {
+            return shizuku
+                    ? "Pantalla y apps hasta 60 FPS; lo demás lo decide el sistema."
+                    : "Con Shizuku, limita a 60 FPS. Sin él, lo decide el sistema.";
+        }
+        return "La frecuencia la decide el sistema, como siempre" + (fixed60 ? "." : " (hasta " + hz + " FPS).");
     }
 }

@@ -42,6 +42,7 @@ public class PulsoService extends Service
     private EdgeHandle handle;
     private GamePanel panel;
     private Hud hud;
+    private EdgeGlow edge;
     private ComponentCallbacks callbacks;
 
     static void start(Context c) {
@@ -78,6 +79,7 @@ public class PulsoService extends Service
         handle = new EdgeHandle(wctx, this);
         panel = new GamePanel(this, wctx);
         hud = new Hud(wctx, stats);
+        edge = new EdgeGlow(wctx);
 
         Mode m = Prefs.mode(this);
         applyModeUi(m);
@@ -154,6 +156,7 @@ public class PulsoService extends Service
             }
             panel.destroy();
             hud.setVisible(false);
+            edge.setVisible(false);
             handle.detach();
             stats.shutdown();
             if (!Prefs.enabled(this)) {
@@ -179,6 +182,7 @@ public class PulsoService extends Service
         if (!started) return;
         handle.relayout();
         hud.relayout();
+        edge.relayout();
         if (panel.isOpen()) panel.close(); // girar con el panel abierto: se cierra y se vuelve a abrir colocado
     }
 
@@ -204,6 +208,12 @@ public class PulsoService extends Service
                 break;
             case Prefs.ECO_FPS:
                 if (Prefs.mode(this) == Mode.ECO) ModeController.apply(this, Mode.ECO);
+                break;
+            case Prefs.BAL_FPS:
+                if (Prefs.mode(this) == Mode.BALANCED) ModeController.apply(this, Mode.BALANCED);
+                break;
+            case Prefs.EDGE:
+                applyModeUi(Prefs.mode(this));
                 break;
             case Prefs.AWAKE:
                 handle.setKeepScreenOn(Prefs.awake(this));
@@ -233,6 +243,7 @@ public class PulsoService extends Service
     private void applyModeUi(Mode m) {
         handle.setAccent(m.c1);
         hud.setAccent(m.c1);
+        edge.setVisible(m == Mode.PERFORMANCE && Prefs.edge(this));
         if (Shizuku.ready() || m == Mode.BALANCED) {
             handle.setRefreshHint(0, 0f);
         } else if (m == Mode.PERFORMANCE) {
@@ -261,7 +272,7 @@ public class PulsoService extends Service
         String edge = Prefs.side(this) == 0 ? "izquierdo" : "derecho";
         Notification.Builder b = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle("Modo " + m.label)
+                .setContentTitle(m.label.startsWith("Modo") ? m.label : "Modo " + m.label)
                 .setContentText("Desliza desde el borde " + edge + " para abrir el panel")
                 .setColor(m.c1)
                 .setOngoing(true)

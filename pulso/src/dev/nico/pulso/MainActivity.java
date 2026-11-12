@@ -37,10 +37,10 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private TextView szStatus, szButton, szSteps;
     private View szDot;
     private PermRow pOverlay, pNotif, pUsage, pWrite;
-    private Segmented sideSeg, hudSeg, ecoSeg;
+    private Segmented sideSeg, hudSeg, ecoSeg, balSeg;
     private Slider posSlider, sizeSlider, alphaSlider;
     private TextView posVal, sizeVal, alphaVal;
-    private ToggleSwitch tapSw, hudSw, awakeSw, bootSw;
+    private ToggleSwitch tapSw, hudSw, awakeSw, bootSw, edgeSw;
 
     // ---------------------------------------------------------------- ciclo de vida
 
@@ -213,8 +213,10 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         mainButton.setText(on ? "Desactivar" : "Activar");
         openButton.setVisibility(on ? View.VISIBLE : View.GONE);
 
-        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this), Prefs.ecoFps(this)));
+        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this), Prefs.ecoFps(this), Prefs.balFps(this)));
         if (ecoSeg != null) ecoSeg.select(Prefs.ecoFps(this) == 60 ? 1 : 0, false);
+        if (balSeg != null) balSeg.select(Prefs.balFps(this) == 60 ? 0 : 1, false);
+        edgeSw.setChecked(Prefs.edge(this), false);
 
         Shizuku.State st = Shizuku.state(this);
         int dotColor;
@@ -277,7 +279,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private void applyAccent(Mode m) {
         Slider[] sliders = {posSlider, sizeSlider, alphaSlider};
         for (Slider s : sliders) s.setAccent(m.c1, m.c2);
-        ToggleSwitch[] sw = {tapSw, hudSw, awakeSw, bootSw};
+        ToggleSwitch[] sw = {tapSw, hudSw, awakeSw, bootSw, edgeSw};
         for (ToggleSwitch s : sw) s.setAccent(m.c1, m.c2);
         styleButton(mainButton, !PulsoService.running, m);
     }
@@ -362,6 +364,18 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
         card.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(2), Ui.dp(12), Ui.dp(2), 0));
         if (Sys.maxRefresh(this) >= 61f) {
+            card.addView(label("Límite en Equilibrado"), Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, 0));
+            balSeg = new Segmented(this, "60 FPS", Ui.f0(Sys.maxRefresh(this)) + " FPS");
+            balSeg.setListener(new Segmented.Listener() {
+                @Override
+                public void onSelect(Segmented s, int index) {
+                    Prefs.put(MainActivity.this, Prefs.BAL_FPS, index == 0 ? 60 : 120);
+                    if (!PulsoService.running && Prefs.mode(MainActivity.this) == Mode.BALANCED) {
+                        ModeController.apply(MainActivity.this, Mode.BALANCED);
+                    }
+                }
+            });
+            card.addView(balSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             card.addView(label("Límite en Eco"), Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, 0));
             ecoSeg = new Segmented(this, "30 FPS", "60 FPS");
             ecoSeg.setListener(new Segmented.Listener() {
@@ -414,7 +428,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         TextView why = Ui.text(this, "Sin root. Con Shizuku, Pulso puede:", 13.5f, Ui.TEXT2, Ui.REGULAR);
         card.addView(why, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, Ui.dp(4)));
         String[] items = {
-                "Limitar de verdad a 30 FPS en Eco y fijar 120 Hz en Rendimiento",
+                "Limitar de verdad los FPS en Equilibrado y Eco, y fijar 120 Hz en Modo Gamer",
                 "Leer la temperatura de la CPU y la GPU",
                 "Medir los FPS reales del juego",
                 "Mejora táctil, modo noche y liberar RAM desde el panel",
@@ -536,6 +550,15 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
             }
         });
         card.addView(switchRow("No apagar la pantalla", "Mientras el panel esté activo", awakeSw));
+        edgeSw = new ToggleSwitch(this);
+        edgeSw.setListener(new ToggleSwitch.Listener() {
+            @Override
+            public void onChanged(ToggleSwitch s, boolean on) {
+                Prefs.put(MainActivity.this, Prefs.EDGE, on);
+            }
+        });
+        card.addView(switchRow("Borde de luz en Modo Gamer", "Neón alrededor de la pantalla mientras juegas", edgeSw),
+                Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(14), 0, 0));
         bootSw = new ToggleSwitch(this);
         bootSw.setListener(new ToggleSwitch.Listener() {
             @Override

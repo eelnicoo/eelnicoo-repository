@@ -17,7 +17,7 @@ final class Segmented extends View {
         void onSelect(Segmented s, int index);
     }
 
-    private final String[] items;
+    private String[] items;
     private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint trackStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ind = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -48,6 +48,14 @@ final class Segmented extends View {
 
     void setListener(Listener l) {
         listener = l;
+    }
+
+    void setItems(int selected, String... newItems) {
+        items = newItems;
+        index = Math.max(0, Math.min(items.length - 1, selected));
+        if (anim != null) anim.cancel();
+        pos = index;
+        invalidate();
     }
 
     /** Versión compacta, para el panel. */
@@ -105,6 +113,7 @@ final class Segmented extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        if (!isEnabled()) return false;
         if (e.getActionMasked() == MotionEvent.ACTION_UP) {
             float p = Ui.dpf(3.5f);
             float seg = (getWidth() - 2 * p) / items.length;
