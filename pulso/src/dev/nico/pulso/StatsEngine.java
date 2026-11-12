@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 /**
  * Lee el rendimiento una vez por segundo, solo mientras alguien escucha (panel abierto o HUD).
  * Sin Shizuku: batería, consumo, RAM, frecuencia de pantalla y estado térmico.
- * Con Shizuku: además FPS reales (contador de frames de SurfaceFlinger), carga y
+ * Con Shizuku: además FPS reales (tiempos de frame de la capa del juego en SurfaceFlinger), carga y
  * frecuencia de la CPU y temperaturas de CPU/GPU del HAL térmico.
  */
 final class StatsEngine {
@@ -37,7 +37,6 @@ final class StatsEngine {
     }
 
     static final int HISTORY = 60;
-    private static final Pattern PARCEL = Pattern.compile("Parcel\\(\\s*([0-9a-fA-F]{8})");
     private static final Pattern TEMP = Pattern.compile("Temperature\\{mValue=([-0-9.Ee]+), mType=(-?\\d+), mName=([^,}]*)");
 
     private final Context app;
@@ -49,10 +48,12 @@ final class StatsEngine {
     private Stats last;
 
     // Estado del muestreo: solo se toca en el hilo de fondo.
-    private long lastFrames = -1, lastFramesAt;
+    private String fpsLayer;
+    private long lastPresent = -1;
     private long lastTotal = -1, lastIdle;
-    private int tick, flipFails;
+    private int tick;
     private float headroom = Float.NaN, cpuT = Float.NaN, gpuT = Float.NaN, skinT = Float.NaN;
+    private long cpuOk, gpuOk, skinOk;
     private final float[] hFps = nan(), hPow = nan(), hCpu = nan(), hBat = nan();
     private List<String[]> zones;
 
@@ -106,8 +107,9 @@ final class StatsEngine {
     private final Runnable resetCounters = new Runnable() {
         @Override
         public void run() {
-            lastFrames = -1;
+            lastPresent = -1;
             lastTotal = -1;
+            fpsLayer = null;
         }
     };
 
@@ -189,8 +191,9 @@ final class StatsEngine {
         if (s.shizuku) {
             privileged(s, slow);
         } else {
-            lastFrames = -1;
+            lastPresent = -1;
             lastTotal = -1;
+            fpsLayer = null;
             if (slow) sysfs();
         }
         s.cpuTemp = cpuT;
@@ -209,40 +212,94 @@ final class StatsEngine {
     }
 
     private void privileged(Stats s, boolean slow) {
-        boolean flip = flipFails < 3;
+        // Cada 3 s se busca la capa del juego (su SurfaceView) para leer sus tiempos de frame.
+        boolean findLayer = tick % 3 == 0;
+        String pkg = findLayer ? Sys.foregroundPackage(app) : null;
+        String layer = fpsLayer;
         StringBuilder cmd = new StringBuilder();
-        cmd.append(flip ? "service call SurfaceFlinger 1013" : "true");
+        cmd.append(findLayer && pkg != null ? "dumpsys SurfaceFlinger --list" : "true");
+        cmd.append("; echo @@; ");
+        cmd.append(layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "'" : "true");
         cmd.append("; echo @@; head -n 1 /proc/stat; echo @@; cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null");
         if (slow) cmd.append("; echo @@; dumpsys thermalservice 2>/dev/null");
-        String out = Shell.run(cmd.toString(), 2500);
+        String out = Shell.run(cmd.toString(), 3000);
         if (out == null) {
-            lastFrames = -1;
+            lastPresent = -1;
             return;
         }
         String[] parts = out.split("@@\n", -1);
-        long now = SystemClock.uptimeMillis();
-        if (flip) {
-            Matcher m = PARCEL.matcher(parts[0]);
-            if (m.find()) {
-                flipFails = 0;
-                long frames = Long.parseLong(m.group(1), 16);
-                if (lastFrames >= 0 && frames >= lastFrames) {
-                    float dt = (now - lastFramesAt) / 1000f;
-                    if (dt > 0.3f) {
-                        float cap = s.maxRefresh > 0 ? s.maxRefresh : 240f;
-                        s.fps = Math.min((frames - lastFrames) / dt, cap);
-                    }
-                }
-                lastFrames = frames;
-                lastFramesAt = now;
-            } else {
-                flipFails++;
-                lastFrames = -1;
+        if (findLayer) {
+            String picked = pkg != null ? pickLayer(parts[0], pkg) : null;
+            if (picked == null || !picked.equals(fpsLayer)) lastPresent = -1;
+            fpsLayer = picked;
+        }
+        if (layer != null && layer.equals(fpsLayer) && parts.length > 1) latency(s, parts[1]);
+        if (parts.length > 2) cpuLoad(s, parts[2]);
+        if (parts.length > 3) cpuFreq(s, parts[3]);
+        if (slow && parts.length > 4) thermal(parts[4]);
+    }
+
+    /** La capa que dibuja el juego: su SurfaceView (la de BLAST si hay), o si no la de su ventana. */
+    static String pickLayer(String list, String pkg) {
+        String best = null;
+        int bestScore = 0;
+        for (String raw : list.split("\n")) {
+            String l = raw.trim();
+            if (l.isEmpty() || l.indexOf('\'') >= 0 || !l.contains(pkg)) continue;
+            if (l.startsWith("Background for") || l.startsWith("Bounds for")) continue;
+            int score = 1;
+            if (l.startsWith("SurfaceView")) score += 4;
+            if (l.contains("BLAST")) score += 2;
+            if (score > bestScore) {
+                bestScore = score;
+                best = l;
             }
         }
-        if (parts.length > 1) cpuLoad(s, parts[1]);
-        if (parts.length > 2) cpuFreq(s, parts[2]);
-        if (slow && parts.length > 3) thermal(parts[3]);
+        return best;
+    }
+
+    /** FPS a partir de los últimos 128 tiempos de presentación de la capa (en ns). */
+    private void latency(Stats s, String text) {
+        String[] lines = text.split("\n");
+        long[] ts = new long[lines.length];
+        int n = 0;
+        for (int i = 1; i < lines.length; i++) {
+            String[] f = lines[i].trim().split("\\s+");
+            if (f.length < 3) continue;
+            long t = nanos(f[1]);
+            if (t <= 0) t = nanos(f[2]);
+            if (t > 0) ts[n++] = t;
+        }
+        if (n < 2) return;
+        Arrays.sort(ts, 0, n);
+        long newest = ts[n - 1];
+        if (newest == lastPresent) { // ningún frame nuevo desde la última lectura
+            s.fps = 0f;
+            return;
+        }
+        lastPresent = newest;
+        long from = newest - 1_000_000_000L;
+        int count = 0;
+        long oldest = newest;
+        for (int i = 0; i < n; i++) {
+            if (ts[i] >= from) {
+                count++;
+                oldest = Math.min(oldest, ts[i]);
+            }
+        }
+        if (count >= 2 && newest > oldest) {
+            float cap = s.maxRefresh > 0 ? s.maxRefresh + 1f : 241f;
+            s.fps = Math.min((count - 1) * 1e9f / (newest - oldest), cap);
+        }
+    }
+
+    private static long nanos(String v) {
+        try {
+            long t = Long.parseLong(v);
+            return t == Long.MAX_VALUE ? -1 : t;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private void cpuLoad(Stats s, String text) {
@@ -281,6 +338,20 @@ final class StatsEngine {
             int to = text.indexOf("Current cooling devices", from);
             sec = text.substring(from, to > from ? to : text.length());
         }
+        float[] t = temps(sec);
+        if (sec != text) { // lo que falte en la lectura del HAL, de la caché del servicio
+            float[] all = temps(text);
+            for (int i = 0; i < t.length; i++) if (!Stats.ok(t[i])) t[i] = all[i];
+        }
+        // Si un sensor falla un momento, se mantiene el último valor hasta 15 s (que no parpadee).
+        long now = SystemClock.uptimeMillis();
+        if (Stats.ok(t[0])) { cpuT = t[0]; cpuOk = now; } else if (now - cpuOk > 15000) cpuT = Float.NaN;
+        if (Stats.ok(t[1])) { gpuT = t[1]; gpuOk = now; } else if (now - gpuOk > 15000) gpuT = Float.NaN;
+        if (Stats.ok(t[2])) { skinT = t[2]; skinOk = now; } else if (now - skinOk > 15000) skinT = Float.NaN;
+    }
+
+    /** {cpu, gpu, carcasa} según los tipos del HAL térmico (y el nombre, por si el tipo no viene). */
+    private static float[] temps(String sec) {
         float cpu = Float.NaN, gpu = Float.NaN, skin = Float.NaN, vskin = Float.NaN, soc = Float.NaN;
         Matcher m = TEMP.matcher(sec);
         while (m.find()) {
@@ -294,20 +365,14 @@ final class StatsEngine {
             }
             if (!(v > -30f && v < 150f)) continue;
             String name = m.group(3).trim().toUpperCase(Locale.ROOT);
-            switch (type) {
-                case 0: cpu = max(cpu, v); break;            // TYPE_CPU
-                case 1: gpu = max(gpu, v); break;            // TYPE_GPU
-                case 3:                                       // TYPE_SKIN
-                    if (name.contains("VIRTUAL")) vskin = v;
-                    else skin = max(skin, v);
-                    break;
-                case 13: soc = max(soc, v); break;           // TYPE_SOC
-                default: break;
-            }
+            if (type == 1 || name.startsWith("GPU") || name.equals("G3D")) gpu = max(gpu, v);   // TYPE_GPU
+            else if (type == 0) cpu = max(cpu, v);                                             // TYPE_CPU
+            else if (type == 3) {                                                               // TYPE_SKIN
+                if (name.contains("VIRTUAL")) vskin = v;
+                else skin = max(skin, v);
+            } else if (type == 13) soc = max(soc, v);                                           // TYPE_SOC
         }
-        cpuT = Stats.ok(cpu) ? cpu : soc;
-        gpuT = gpu;
-        skinT = Stats.ok(vskin) ? vskin : skin;
+        return new float[] {Stats.ok(cpu) ? cpu : soc, gpu, Stats.ok(vskin) ? vskin : skin};
     }
 
     /** Sin Shizuku: intenta leer las zonas térmicas de /sys (en muchos móviles SELinux no lo deja). */

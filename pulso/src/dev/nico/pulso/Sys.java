@@ -126,7 +126,8 @@ final class Sys {
                     if (e.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED) pkg = e.getPackageName();
                 }
             } else if (Shizuku.ready()) {
-                String out = Shell.run("dumpsys activity activities | grep -m 1 -E 'topResumedActivity|ResumedActivity'", 3000);
+                String out = Shell.run("dumpsys activity activities | grep -m 1 'topResumedActivity='"
+                        + " || dumpsys activity activities | grep -m 1 'ResumedActivity'", 3000);
                 if (out != null) {
                     Matcher m = RESUMED.matcher(out);
                     if (m.find()) pkg = m.group(1);

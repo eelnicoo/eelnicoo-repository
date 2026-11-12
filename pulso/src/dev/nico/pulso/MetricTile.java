@@ -9,7 +9,7 @@ import android.text.TextPaint;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 
-/** Tarjeta de un dato: etiqueta, anillo de progreso, valor grande con unidad y una línea de detalle. */
+/** Tarjeta de un dato: etiqueta, valor grande con unidad, una línea de detalle y una barra de progreso. */
 final class MetricTile extends View {
     private final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -40,12 +40,7 @@ final class MetricTile extends View {
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeWidth(Math.max(1f, Ui.dpf(1)));
         stroke.setColor(Ui.TILE_STROKE);
-        ringBg.setStyle(Paint.Style.STROKE);
-        ringBg.setStrokeWidth(Ui.dpf(3));
         ringBg.setColor(0x17FFFFFF);
-        ring.setStyle(Paint.Style.STROKE);
-        ring.setStrokeWidth(Ui.dpf(3));
-        ring.setStrokeCap(Paint.Cap.ROUND);
         labelP.setLetterSpacing(0.06f);
         valueP.setFontFeatureSettings("tnum");
         subP.setFontFeatureSettings("tnum");
@@ -86,27 +81,16 @@ final class MetricTile extends View {
     @Override
     protected void onDraw(Canvas cv) {
         float w = getWidth(), h = getHeight();
-        float radius = Ui.dpf(16), pad = Ui.dpf(11);
+        float radius = Ui.dpf(16), pad = Ui.dpf(10);
         r.set(0.5f, 0.5f, w - 0.5f, h - 0.5f);
         cv.drawRoundRect(r, radius, radius, bg);
         cv.drawRoundRect(r, radius, radius, stroke);
+        float avail = w - 2 * pad;
 
-        // Anillo arriba a la derecha.
-        float rr = Ui.dpf(7f);
-        float cx = w - pad - rr, cy = pad + rr;
-        arc.set(cx - rr, cy - rr, cx + rr, cy + rr);
-        cv.drawOval(arc, ringBg);
-        if (shown > 0.005f) {
-            ring.setColor(color);
-            cv.drawArc(arc, -90f, 360f * shown, false, ring);
-        }
-
-        // Etiqueta.
-        float labelW = cx - rr - Ui.dpf(6) - pad;
-        cv.drawText(Ui.fit(labelP, label, labelW), pad, Ui.baseline(labelP, cy), labelP);
+        // Etiqueta arriba.
+        cv.drawText(Ui.fit(labelP, label, avail), pad, Ui.baseline(labelP, pad + Ui.dpf(5)), labelP);
 
         // Valor + unidad, encogiendo el valor si no cabe.
-        float avail = w - 2 * pad;
         float unitW = unit.isEmpty() ? 0f : unitP.measureText(unit) + Ui.dpf(3);
         float size = Ui.dpf(22);
         valueP.setTextSize(size);
@@ -114,11 +98,21 @@ final class MetricTile extends View {
             size -= Ui.dpf(1);
             valueP.setTextSize(size);
         }
-        float base = h * 0.66f;
+        float base = h * 0.58f;
         cv.drawText(value, pad, base, valueP);
         if (!unit.isEmpty()) cv.drawText(unit, pad + valueP.measureText(value) + Ui.dpf(3), base, unitP);
 
         // Detalle.
-        cv.drawText(Ui.fit(subP, sub, avail), pad, h - pad + Ui.dpf(1), subP);
+        cv.drawText(Ui.fit(subP, sub, avail), pad, h - pad - Ui.dpf(9), subP);
+
+        // Barra de progreso abajo.
+        float by = h - Ui.dpf(9), bh = Ui.dpf(1.5f);
+        arc.set(pad, by - bh, w - pad, by + bh);
+        cv.drawRoundRect(arc, bh, bh, ringBg);
+        if (shown > 0.005f) {
+            ring.setColor(color);
+            arc.set(pad, by - bh, pad + Math.max(2 * bh, avail * shown), by + bh);
+            cv.drawRoundRect(arc, bh, bh, ring);
+        }
     }
 }

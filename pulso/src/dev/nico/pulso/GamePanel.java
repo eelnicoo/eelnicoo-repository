@@ -60,7 +60,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ImageView appIcon;
     private TextView title, subtitle, clock, battery, modeDesc, hint;
     private ModeSelector modes;
-    private MetricTile tCpu, tGpu, tBat, tFps, tPow, tRam;
+    private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
     private ToggleTile gHud, gDnd, gBright, gAwake, gShot, gRam;
     private String pkg;
@@ -105,7 +105,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             top = Math.max(cut.top, bars.top) + Ui.dp(8);
             bottom = H - Math.max(cut.bottom, bars.bottom) - Ui.dp(8);
         }
-        int panelW = land ? Math.min(Math.round((right - left) * 0.68f), Ui.dp(640)) : Math.min(right - left, Ui.dp(392));
+        int panelW = land ? Math.min(Math.round((right - left) * 0.74f), Ui.dp(660)) : Math.min(right - left, Ui.dp(392));
         int maxH = Math.max(Ui.dp(200), bottom - top);
 
         build(land, side == 1);
@@ -293,14 +293,16 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
         int tileH = land ? 76 : 82;
         tCpu = new MetricTile(c, "CPU", tileH);
+        tTerm = new MetricTile(c, "TÉRMICO", tileH);
         tGpu = new MetricTile(c, "GPU", tileH);
-        tBat = new MetricTile(c, "BATERÍA", tileH);
+        tSkin = new MetricTile(c, "CARCASA", tileH);
         tFps = new MetricTile(c, "FPS", tileH);
+        tBat = new MetricTile(c, "BATERÍA", tileH);
         tPow = new MetricTile(c, "CONSUMO", tileH);
         tRam = new MetricTile(c, "RAM", tileH);
         spark = new Sparkline(c, land ? 74 : 84);
 
-        View grid = grid3(c, new View[] {tCpu, tGpu, tBat, tFps, tPow, tRam});
+        View grid = grid(c, new View[] {tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam}, 4);
         View toggles = toggles(c, land ? 62 : 66);
 
         if (land) {
@@ -313,7 +315,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             bcol.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP));
             bcol.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
             bcol.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
-            cols.addView(a, Ui.lp(0, Ui.WRAP, 1.25f));
+            cols.addView(a, Ui.lp(0, Ui.WRAP, 1.6f));
             LinearLayout.LayoutParams bp = Ui.lp(0, Ui.WRAP, 1f);
             bp.leftMargin = Ui.dp(12);
             cols.addView(bcol, bp);
@@ -373,8 +375,11 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         right.setGravity(Gravity.END);
         clock = Ui.textDp(c, clockFmt.format(new Date()), 13.5f, Ui.TEXT, Ui.SEMIBOLD);
         clock.setFontFeatureSettings("tnum");
+        clock.setSingleLine(true);
+        clock.setMinWidth(Math.round(clock.getPaint().measureText("00:00")) + Ui.dp(2));
         battery = Ui.textDp(c, "", 11.5f, Ui.TEXT2, Ui.MEDIUM);
         battery.setFontFeatureSettings("tnum");
+        battery.setSingleLine(true);
         right.addView(clock);
         right.addView(battery, Ui.lp(Ui.WRAP, Ui.WRAP, 0, Ui.dp(4), 0, 0));
         row.addView(right, Ui.lp(Ui.WRAP, Ui.WRAP, Ui.dp(8), 0, 0, 0));
@@ -404,12 +409,12 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         return l;
     }
 
-    private View grid3(Context c, View[] cells) {
+    private View grid(Context c, View[] cells, int cols) {
         LinearLayout grid = Ui.column(c);
         int g = Ui.dp(8);
-        for (int i = 0; i < cells.length; i += 3) {
+        for (int i = 0; i < cells.length; i += cols) {
             LinearLayout row = Ui.row(c);
-            for (int k = 0; k < 3 && i + k < cells.length; k++) {
+            for (int k = 0; k < cols && i + k < cells.length; k++) {
                 LinearLayout.LayoutParams p = Ui.lp(0, Ui.WRAP, 1f);
                 if (k > 0) p.leftMargin = g;
                 row.addView(cells[i + k], p);
@@ -511,7 +516,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 });
             }
         });
-        return grid3(c, new View[] {gHud, gDnd, gBright, gAwake, gShot, gRam});
+        return grid(c, new View[] {gHud, gDnd, gBright, gAwake, gShot, gRam}, 3);
     }
 
     private void refreshToggles() {
@@ -584,40 +589,50 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         battery.setText(s.battery >= 0 ? s.battery + " %" + (s.charging ? " · cargando" : "") : "");
         subtitle.setText(mode.label + " · " + Ui.f0(s.refresh) + " Hz");
 
-        if (Stats.ok(s.cpuTemp)) {
-            String sub;
-            if (Stats.ok(s.cpuGhz) && Stats.ok(s.cpuLoad)) sub = Ui.f1(s.cpuGhz) + " GHz · " + Ui.f0(s.cpuLoad * 100f) + " %";
-            else if (Stats.ok(s.cpuGhz)) sub = Ui.f1(s.cpuGhz) + " GHz";
-            else sub = Sys.thermalName(s.thermal);
-            tCpu.set("CPU", Ui.f0(s.cpuTemp), "°C", sub, (s.cpuTemp - 25f) / 70f, Ui.severity(s.cpuTemp, 55f, 72f));
+        String needs = s.shizuku ? "Sin sensor" : "Con Shizuku";
+
+        // CPU: uso y frecuencia.
+        if (Stats.ok(s.cpuLoad)) {
+            tCpu.set("CPU", Ui.f0(s.cpuLoad * 100f), "%", Stats.ok(s.cpuGhz) ? Ui.f1(s.cpuGhz) + " GHz" : "Uso",
+                    s.cpuLoad, s.cpuLoad > 0.85f ? Ui.WARN : mode.c1);
         } else {
-            tCpu.set("CPU", "—", "", s.shizuku ? "Sin sensor" : "Requiere Shizuku", 0f, Ui.TEXT3);
+            tCpu.set("CPU", "—", "", s.shizuku ? "Midiendo…" : "Con Shizuku", 0f, Ui.TEXT3);
+        }
+
+        // Térmico: temperatura de la CPU y el estado térmico del sistema.
+        if (Stats.ok(s.cpuTemp)) {
+            tTerm.set("TÉRMICO", Ui.f0(s.cpuTemp), "°C", Sys.thermalName(s.thermal),
+                    (s.cpuTemp - 25f) / 70f, Ui.severity(s.cpuTemp, 60f, 80f));
+        } else {
+            float frac = Stats.ok(s.headroom) ? s.headroom : s.thermal / 6f;
+            tTerm.set("TÉRMICO", Sys.thermalName(s.thermal), "", needs, frac, Sys.thermalColor(s.thermal));
         }
 
         if (Stats.ok(s.gpuTemp)) {
-            String sub = Stats.ok(s.skinTemp) ? "Carcasa " + Ui.f0(s.skinTemp) + "°" : "Gráficos";
-            tGpu.set("GPU", Ui.f0(s.gpuTemp), "°C", sub, (s.gpuTemp - 25f) / 70f, Ui.severity(s.gpuTemp, 55f, 72f));
+            tGpu.set("GPU", Ui.f0(s.gpuTemp), "°C", "Gráficos", (s.gpuTemp - 25f) / 70f, Ui.severity(s.gpuTemp, 60f, 80f));
         } else {
-            float frac = Stats.ok(s.headroom) ? s.headroom : s.thermal / 6f;
-            String sub = Stats.ok(s.headroom) ? "Margen " + Ui.f0(Math.max(0f, 1f - s.headroom) * 100f) + " %" : "Estado del sistema";
-            tGpu.set("TÉRMICO", Sys.thermalName(s.thermal), "", sub, frac, Sys.thermalColor(s.thermal));
+            tGpu.set("GPU", "—", "", needs, 0f, Ui.TEXT3);
         }
 
-        String batSub = (s.battery >= 0 ? s.battery + " % · " : "") + (s.charging ? "cargando" : "en uso");
-        tBat.set("BATERÍA", Stats.ok(s.batteryTemp) ? Ui.f1(s.batteryTemp) : "—", "°C", batSub,
-                s.battery / 100f, Ui.severity(s.batteryTemp, 38f, 43f));
+        if (Stats.ok(s.skinTemp)) {
+            tSkin.set("CARCASA", Ui.f0(s.skinTemp), "°C", "Exterior", (s.skinTemp - 20f) / 30f, Ui.severity(s.skinTemp, 40f, 45f));
+        } else {
+            tSkin.set("CARCASA", "—", "", needs, 0f, Ui.TEXT3);
+        }
 
         float max = s.maxRefresh > 0 ? s.maxRefresh : 60f;
         if (Stats.ok(s.fps)) {
-            tFps.set("FPS", Ui.f0(s.fps), "", "Pantalla " + Ui.f0(s.refresh) + " Hz", s.fps / max, mode.c1);
+            tFps.set("FPS", Ui.f0(s.fps), "", Ui.f0(s.refresh) + " Hz", s.fps / max, mode.c1);
         } else {
-            tFps.set("PANTALLA", Ui.f0(s.refresh), "Hz", s.shizuku ? "Máximo " + Ui.f0(max) + " Hz" : "FPS con Shizuku",
-                    s.refresh / max, mode.c1);
+            tFps.set("PANTALLA", Ui.f0(s.refresh), "Hz", "máx. " + Ui.f0(max), s.refresh / max, mode.c1);
         }
 
+        tBat.set("BATERÍA", Stats.ok(s.batteryTemp) ? Ui.f1(s.batteryTemp) : "—", "°C",
+                (s.battery >= 0 ? s.battery + " %" : "") + (s.charging ? " · carga" : ""),
+                s.battery / 100f, Ui.severity(s.batteryTemp, 38f, 43f));
+
         if (Stats.ok(s.power)) {
-            tPow.set(s.charging ? "CARGA" : "CONSUMO", Ui.f1(s.power), "W",
-                    Ui.f2(s.current) + " A · " + Ui.f2(s.voltage) + " V", s.power / 12f,
+            tPow.set(s.charging ? "CARGA" : "CONSUMO", Ui.f1(s.power), "W", Ui.f2(s.current) + " A", s.power / 12f,
                     s.charging ? Ui.GOOD : Ui.severity(s.power, 5f, 9f));
         } else {
             tPow.set("CONSUMO", "—", "", "Sin datos", 0f, Ui.TEXT3);

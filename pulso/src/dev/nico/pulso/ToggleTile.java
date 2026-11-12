@@ -18,7 +18,7 @@ final class ToggleTile extends View {
     private final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final TextPaint labelP = Ui.paint(10.5f, Ui.TEXT2, Ui.SEMIBOLD);
+    private final TextPaint labelP = Ui.paint(10f, Ui.TEXT2, Ui.SEMIBOLD);
     private final RectF r = new RectF();
     private final int heightPx;
 

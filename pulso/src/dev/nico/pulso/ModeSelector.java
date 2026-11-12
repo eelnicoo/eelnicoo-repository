@@ -46,7 +46,7 @@ final class ModeSelector extends View {
         trackStroke.setStyle(Paint.Style.STROKE);
         trackStroke.setStrokeWidth(Math.max(1f, Ui.dpf(1)));
         trackStroke.setColor(Ui.TILE_STROKE);
-        label = Ui.paint(compact ? 11.5f : 12.5f, Ui.TEXT2, Ui.SEMIBOLD);
+        label = Ui.paint(compact ? 11f : 12.5f, Ui.TEXT2, Ui.SEMIBOLD);
         label.setTextAlign(Paint.Align.CENTER);
         setClickable(true);
         setContentDescription("Modo");
