@@ -573,6 +573,9 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                     public void run() {
                         if (!open) return;
                         pkg = p;
+                        // Si ya hay un modo puesto, se aplica también a este juego (límite de FPS y modo de juego).
+                        Mode cur = Prefs.mode(ctx);
+                        if (cur != Mode.BALANCED && Shizuku.ready()) ModeController.select(ctx, cur, p, false);
                         if (label != null) title.setText(label);
                         if (icon != null) appIcon.setImageDrawable(icon);
                     }
@@ -592,13 +595,17 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.0.7 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.0.8 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
                         + "echo '== gpu'; " + StatsEngine.GPU_PROBE + "; "
                         + "for d in /sys/class/devfreq/*gpu*; do ls \"$d\"; cat \"$d/cur_freq\" \"$d/available_frequencies\" 2>/dev/null; done; "
-                        + "echo '== tacto'; settings list secure | grep -iE 'touch|protector'; settings list system | grep -iE 'touch|protector'", 15000);
+                        + "echo '== tacto'; settings list secure | grep -iE 'touch|protector'; settings list system | grep -iE 'touch|protector'; "
+                        + "echo '== limite'; getprop ro.surface_flinger.enable_frame_rate_override; "
+                        + "settings get system peak_refresh_rate; settings get system min_refresh_rate; "
+                        + "dumpsys display | grep -iE 'FrameRateOverride|renderFrameRate|supportedModes|mAppRequest|Vote' | head -n 25; "
+                        + (p != null ? "cmd game list-modes " + p + "; cmd game list-configs " + p + "; dumpsys game | grep -B2 -A6 " + p + " | head -n 30" : "echo sin juego"), 20000);
                 final String text = out != null ? out : "Shizuku no respondió";
                 main.post(new Runnable() {
                     @Override

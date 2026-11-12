@@ -66,6 +66,7 @@ final class ModeController {
             if (games != null) {
                 for (String g : games) {
                     if (Sys.PACKAGE_NAME.matcher(g).matches()) {
+                        cmd.append("cmd game reset ").append(g).append(" >/dev/null 2>&1; ");
                         cmd.append("cmd game mode standard ").append(g).append(" >/dev/null 2>&1; ");
                     }
                 }
@@ -101,6 +102,11 @@ final class ModeController {
         }
 
         if (pkg != null && Sys.PACKAGE_NAME.matcher(pkg).matches()) {
+            // Límite de FPS solo para el juego (modo de juego de Android): sirve donde el ajuste
+            // global no baja de los Hz de la pantalla (la tablet, con su panel fijo a 60 Hz).
+            if (m == Mode.SAVER) {
+                cmd.append("cmd game set --mode 3 --fps ").append(Prefs.saverFps(c)).append(' ').append(pkg).append(" >/dev/null 2>&1; ");
+            }
             cmd.append("cmd game mode ").append(m == Mode.PERFORMANCE ? "performance " : "battery ")
                     .append(pkg).append(" >/dev/null 2>&1; ");
             Set<String> games = new HashSet<>(p.getStringSet(Prefs.GAMES, new HashSet<String>()));
