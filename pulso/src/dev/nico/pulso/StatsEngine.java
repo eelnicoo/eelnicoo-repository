@@ -37,6 +37,14 @@ final class StatsEngine {
     }
 
     static final int HISTORY = 60;
+    /** Busca el fichero de uso de la GPU (Adreno, Mali, PowerVR…) e imprime «ruta|valor» de los que se pueden leer. */
+    static final String GPU_PROBE = "for f in /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage /sys/class/kgsl/kgsl-3d0/gpubusy"
+            + " /sys/class/misc/mali0/device/utilization /sys/kernel/gpu/gpu_busy /sys/devices/platform/*mali*/utilization"
+            + " /sys/devices/platform/*gpu*/utilization /sys/devices/platform/*gpu*/utilisation /sys/devices/platform/*gpu*/gpu_utilization"
+            + " $(find /sys/devices/platform /sys/kernel/gpu -maxdepth 4 \\( -name '*utili[sz]ation*' -o -name 'gpu_busy*'"
+            + " -o -name 'gpubusy' -o -name '*gpu_load*' \\) 2>/dev/null | head -n 30); do"
+            + " [ -r \"$f\" ] && v=$(head -c 64 \"$f\" 2>/dev/null | head -n 1) && [ -n \"$v\" ] && echo \"$f|$v\"; done";
+    private static final Pattern SAFE_PATH = Pattern.compile("[A-Za-z0-9_./:@,+-]+");
     private static final Pattern TEMP = Pattern.compile("Temperature\\{mValue=([-0-9.Ee]+), mType=(-?\\d+), mName=([^,}]*)");
 
     private final Context app;
@@ -51,6 +59,8 @@ final class StatsEngine {
     private String fpsLayer, fpsPkg;
     private int latencyMisses;
     private boolean useTimestats, timestatsOn;
+    private String gpuPath;
+    private boolean gpuSearched;
     private long lastPresent = -1;
     private long lastTotal = -1, lastIdle;
     private int tick;
@@ -246,8 +256,10 @@ final class StatsEngine {
         cmd.append(list ? "dumpsys SurfaceFlinger --list" : "true");
         cmd.append("; echo @@; ").append(fpsCmd);
         cmd.append("; echo @@; head -n 1 /proc/stat; echo @@; cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null");
-        if (slow) cmd.append("; echo @@; dumpsys thermalservice 2>/dev/null");
-        String out = Shell.run(cmd.toString(), 3000);
+        cmd.append("; echo @@; ").append(slow ? "dumpsys thermalservice 2>/dev/null" : "true");
+        boolean probe = gpuPath == null && !gpuSearched;
+        cmd.append("; echo @@; ").append(probe ? GPU_PROBE : (gpuPath != null ? "head -c 64 '" + gpuPath + "' | head -n 1" : "true"));
+        String out = Shell.run(cmd.toString(), probe ? 6000 : 3000);
         if (out == null) {
             lastPresent = -1;
             return;
@@ -273,7 +285,44 @@ final class StatsEngine {
         if (parts.length > 2) cpuLoad(s, parts[2]);
         if (parts.length > 3) cpuFreq(s, parts[3]);
         if (slow && parts.length > 4) thermal(parts[4]);
+        if (parts.length > 5) {
+            if (probe) {
+                gpuSearched = true;
+                for (String line : parts[5].split("\n")) {
+                    int bar = line.indexOf('|');
+                    if (bar <= 0) continue;
+                    String path = line.substring(0, bar).trim();
+                    if (SAFE_PATH.matcher(path).matches() && Stats.ok(gpuLoad(line.substring(bar + 1)))) {
+                        gpuPath = path;
+                        break;
+                    }
+                }
+            } else if (gpuPath != null) {
+                s.gpuLoad = gpuLoad(parts[5]);
+            }
+        }
     }
+
+    /** Uso de la GPU (0..1) a partir de «45», «45 %» o «ocupado total» (gpubusy de Adreno). */
+    static float gpuLoad(String raw) {
+        String v = raw.trim();
+        if (v.isEmpty()) return Float.NaN;
+        String[] f = v.split("\\s+");
+        try {
+            if (f.length >= 2 && f[0].matches("\\d+") && f[1].matches("\\d+")) {
+                long busy = Long.parseLong(f[0]), total = Long.parseLong(f[1]);
+                return total > 0 ? Ui.clamp01(busy / (float) total) : 0f;
+            }
+            Matcher m = NUMBER.matcher(v);
+            if (!m.find()) return Float.NaN;
+            float n = Float.parseFloat(m.group());
+            return n >= 0f && n <= 100f ? n / 100f : Float.NaN;
+        } catch (NumberFormatException e) {
+            return Float.NaN;
+        }
+    }
+
+    private static final Pattern NUMBER = Pattern.compile("\\d+(\\.\\d+)?");
 
     /** FPS medios del último segundo de la capa del juego, según «dumpsys SurfaceFlinger --timestats». */
     static float timestatsFps(String text, String pkg, float maxRefresh) {

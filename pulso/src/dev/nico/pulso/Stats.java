@@ -24,6 +24,7 @@ final class Stats {
     float cpuGhz = Float.NaN;
     float cpuTemp = Float.NaN;
     float gpuTemp = Float.NaN;
+    float gpuLoad = Float.NaN;
     float skinTemp = Float.NaN;
 
     float[] histFps;

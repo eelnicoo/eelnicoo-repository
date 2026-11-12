@@ -583,11 +583,12 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             public void run() {
                 String list = Shell.run("dumpsys SurfaceFlinger --list | grep -F '" + p + "'", 5000);
                 String layer = list != null ? StatsEngine.pickLayer(list, p) : null;
-                String out = Shell.run("echo \"Pulso 1.0.2 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
+                String out = Shell.run("echo \"Pulso 1.0.3 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
                         + "echo '== capas'; dumpsys SurfaceFlinger --list | grep -F '" + p + "'; "
                         + "echo '== latency'; " + (layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "' | head -n 6" : "echo sin capa") + "; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
-                        + "dumpsys SurfaceFlinger --timestats -dump | grep -B2 -A14 -F '" + p + "' | head -n 60", 12000);
+                        + "dumpsys SurfaceFlinger --timestats -dump | grep -B2 -A14 -F '" + p + "' | head -n 60; "
+                        + "echo '== gpu'; " + StatsEngine.GPU_PROBE + "; ls -d /sys/devices/platform/*gpu* /sys/class/devfreq/* 2>/dev/null | head -n 20", 15000);
                 final String text = out != null ? out : "Shizuku no respondió";
                 main.post(new Runnable() {
                     @Override
@@ -649,10 +650,13 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             tTerm.set("TÉRMICO", Sys.thermalName(s.thermal), "", needs, frac, Sys.thermalColor(s.thermal));
         }
 
-        if (Stats.ok(s.gpuTemp)) {
-            tGpu.set("GPU", Ui.f0(s.gpuTemp), "°C", "Gráficos", (s.gpuTemp - 25f) / 70f, Ui.severity(s.gpuTemp, 60f, 80f));
+        // GPU: uso arriba y temperatura debajo.
+        String gpuTemp = Stats.ok(s.gpuTemp) ? Ui.f0(s.gpuTemp) + " °C" : needs;
+        if (Stats.ok(s.gpuLoad)) {
+            tGpu.set("GPU", Ui.f0(s.gpuLoad * 100f), "%", gpuTemp, s.gpuLoad,
+                    Stats.ok(s.gpuTemp) && s.gpuTemp >= 80f ? Ui.HOT : (s.gpuLoad > 0.85f ? Ui.WARN : mode.c1));
         } else {
-            tGpu.set("GPU", "—", "", needs, 0f, Ui.TEXT3);
+            tGpu.set("GPU", "—", "%", gpuTemp, 0f, Stats.ok(s.gpuTemp) ? Ui.severity(s.gpuTemp, 60f, 80f) : Ui.TEXT3);
         }
 
         if (Stats.ok(s.skinTemp)) {
