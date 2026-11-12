@@ -290,7 +290,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 // El servicio verá el cambio en los ajustes y llamará a onModeChanged().
             }
         });
-        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz), 11.5f, Ui.TEXT2, Ui.MEDIUM);
+        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz, Prefs.saverFps(ctx)), 11.5f, Ui.TEXT2, Ui.MEDIUM);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
 
         int tileH = land ? 76 : 82;
@@ -550,7 +550,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             });
         }
         hint.setVisibility(sz ? View.GONE : View.VISIBLE);
-        modeDesc.setText(mode.describe(sz, maxHz));
+        modeDesc.setText(mode.describe(sz, maxHz, Prefs.saverFps(ctx)));
     }
 
     private void applyAccent(boolean animate) {
@@ -592,7 +592,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.0.6 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.0.7 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
@@ -623,7 +623,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         if (!open || m == mode) return;
         mode = m;
         if (modes.mode() != m) modes.setMode(m, true);
-        modeDesc.setText(m.describe(Shizuku.ready(), maxHz));
+        modeDesc.setText(m.describe(Shizuku.ready(), maxHz, Prefs.saverFps(ctx)));
         applyAccent(true);
         Stats last = svc.stats().last();
         if (last != null) onStats(last);

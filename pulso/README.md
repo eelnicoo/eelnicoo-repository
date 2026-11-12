@@ -8,7 +8,8 @@ translúcido y desenfocado con:
   - **Rendimiento**: pantalla fija a la frecuencia máxima (120 Hz) y el juego en modo rendimiento
     (API de modos de juego de Android).
   - **Equilibrado**: lo que decida el sistema, sin tocar nada.
-  - **Ahorro**: pantalla y juegos limitados a **60 FPS**, sin modo ahorro.
+  - **Ahorro**: pantalla y juegos limitados a **60 o 30 FPS** (a elegir; 30 de serie en pantallas de 60 Hz,
+    como la de la tablet), sin modo ahorro.
 - **Datos en vivo**: temperatura de CPU, GPU y batería, FPS, consumo en vatios, RAM y estado térmico,
   con una gráfica del último minuto.
 - **Botones rápidos**: HUD flotante de rendimiento, mejora táctil (mayor sensibilidad táctil y animaciones

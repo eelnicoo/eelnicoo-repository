@@ -27,22 +27,20 @@ enum Mode {
         return BALANCED;
     }
 
-    String describe(boolean shizuku, float maxHz) {
+    String describe(boolean shizuku, float maxHz, int saverFps) {
         String hz = Ui.f0(maxHz);
-        if (maxHz < 61f) { // pantalla fija a 60 Hz (p. ej. la Tab S7 FE): solo cambia el modo de juego
-            if (this == PERFORMANCE) return "El juego en modo rendimiento. Esta pantalla va siempre a 60 Hz.";
-            if (this == SAVER) return "El juego en modo ahorro, sin activar el ahorro de batería. Esta pantalla va siempre a 60 Hz.";
-            return "Lo decide el sistema, como siempre.";
-        }
+        boolean fixed60 = maxHz < 61f; // pantalla fija a 60 Hz (p. ej. la Tab S7 FE)
         if (this == PERFORMANCE) {
+            if (fixed60) return "El juego en modo rendimiento. Esta pantalla va siempre a 60 Hz.";
             return shizuku
                     ? "Pantalla fija a " + hz + " Hz y el juego en modo rendimiento."
                     : "Pantalla a " + hz + " Hz mientras Pulso esté activo.";
         }
         if (this == SAVER) {
-            return shizuku
-                    ? "Pantalla y juegos limitados a 60 FPS, sin activar el ahorro de batería."
-                    : "Pide 60 Hz al sistema. Con Shizuku, el límite de 60 FPS es exacto.";
+            if (shizuku) return "Pantalla y juegos limitados a " + saverFps + " FPS, sin activar el ahorro de batería.";
+            return fixed60
+                    ? "Con Shizuku, limita a " + saverFps + " FPS. Sin él, solo cambia el modo de juego."
+                    : "Pide 60 Hz al sistema. Con Shizuku, el límite de " + saverFps + " FPS es exacto.";
         }
         return "La frecuencia la decide el sistema, como siempre.";
     }

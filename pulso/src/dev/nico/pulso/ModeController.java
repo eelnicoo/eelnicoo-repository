@@ -93,8 +93,11 @@ final class ModeController {
             cmd.append("settings put system peak_refresh_rate ").append(hz).append("; ");
             cmd.append("settings put system min_refresh_rate ").append(hz).append("; ");
         } else {
-            cmd.append("settings put system peak_refresh_rate 60.0; ");
-            cmd.append("settings put system min_refresh_rate ").append(saverMin(p.getString(Prefs.ORIG_MIN, null))).append("; ");
+            // Desde Android 14, peak_refresh_rate también limita los FPS a los que dibuja el sistema:
+            // a 30, los juegos van a 30 aunque el panel siga a 60 Hz.
+            int fps = Prefs.saverFps(c);
+            cmd.append("settings put system peak_refresh_rate ").append(rate(fps)).append("; ");
+            cmd.append("settings put system min_refresh_rate ").append(saverMin(p.getString(Prefs.ORIG_MIN, null), fps)).append("; ");
         }
 
         if (pkg != null && Sys.PACKAGE_NAME.matcher(pkg).matches()) {
@@ -115,14 +118,18 @@ final class ModeController {
         return "settings put system " + key + " " + value + "; ";
     }
 
-    /** En Ahorro, el mínimo original si no pasa de 60; si no, 0 (que la pantalla baje cuanto quiera). */
-    private static String saverMin(String orig) {
+    /** En Ahorro, el mínimo original si no pasa del límite; si no, 0 (si no, el mínimo anularía el límite). */
+    private static String saverMin(String orig, int limit) {
         try {
             float v = Float.parseFloat(orig);
-            if (v >= 0f && v <= 60f) return rate(v);
+            if (v >= 0f && v <= limit) return rate(v);
         } catch (Exception ignored) {
         }
         return "0.0";
+    }
+
+    private static String rate(int hz) {
+        return rate((float) hz);
     }
 
     private static String rate(float hz) {

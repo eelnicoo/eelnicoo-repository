@@ -182,6 +182,9 @@ public class PulsoService extends Service
             case Prefs.HUD_POS:
                 hud.relayout();
                 break;
+            case Prefs.SAVER_FPS:
+                if (Prefs.mode(this) == Mode.SAVER) ModeController.apply(this, Mode.SAVER);
+                break;
             case Prefs.AWAKE:
                 handle.setKeepScreenOn(Prefs.awake(this));
                 break;
