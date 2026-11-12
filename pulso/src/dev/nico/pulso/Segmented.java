@@ -23,6 +23,7 @@ final class Segmented extends View {
     private final Paint ind = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint indStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint text = Ui.paint(13f, Ui.TEXT2, Ui.SEMIBOLD);
+    private int heightDp = 42;
     private final RectF r = new RectF();
     private final RectF ir = new RectF();
     private int index;
@@ -49,6 +50,14 @@ final class Segmented extends View {
         listener = l;
     }
 
+    /** Versión compacta, para el panel. */
+    Segmented compact() {
+        heightDp = 34;
+        text.setTextSize(Ui.dpf(11.5f));
+        requestLayout();
+        return this;
+    }
+
     void select(int i, boolean animate) {
         index = Math.max(0, Math.min(items.length - 1, i));
         if (anim != null) anim.cancel();
@@ -73,7 +82,7 @@ final class Segmented extends View {
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         int w = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED ? Ui.dp(260) : MeasureSpec.getSize(widthSpec);
-        setMeasuredDimension(w, Ui.dp(42));
+        setMeasuredDimension(w, Ui.dp(heightDp));
     }
 
     @Override
