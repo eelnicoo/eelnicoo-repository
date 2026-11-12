@@ -105,7 +105,9 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             top = Math.max(cut.top, bars.top) + Ui.dp(8);
             bottom = H - Math.max(cut.bottom, bars.bottom) - Ui.dp(8);
         }
-        int panelW = land ? Math.min(Math.round((right - left) * 0.74f), Ui.dp(660)) : Math.min(right - left, Ui.dp(392));
+        boolean tablet = Math.min(W, H) >= Ui.dp(600);
+        int panelW = land ? Math.min(Math.round((right - left) * 0.74f), Ui.dp(tablet ? 780 : 660))
+                : Math.min(right - left, Ui.dp(tablet ? 540 : 392));
         int maxH = Math.max(Ui.dp(200), bottom - top);
 
         build(land, side == 1);
@@ -303,6 +305,14 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         spark = new Sparkline(c, land ? 74 : 84);
 
         View grid = grid(c, new View[] {tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam}, 4);
+        tFps.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                copyDiagnostic();
+                return true;
+            }
+        });
         View toggles = toggles(c, land ? 62 : 66);
 
         if (land) {
@@ -380,7 +390,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         battery = Ui.textDp(c, "", 11.5f, Ui.TEXT2, Ui.MEDIUM);
         battery.setFontFeatureSettings("tnum");
         battery.setSingleLine(true);
-        right.addView(clock);
+        right.addView(clock, Ui.lp(Ui.WRAP, Ui.WRAP));
         right.addView(battery, Ui.lp(Ui.WRAP, Ui.WRAP, 0, Ui.dp(4), 0, 0));
         row.addView(right, Ui.lp(Ui.WRAP, Ui.WRAP, Ui.dp(8), 0, 0, 0));
 
@@ -554,6 +564,37 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                         pkg = p;
                         if (label != null) title.setText(label);
                         if (icon != null) appIcon.setImageDrawable(icon);
+                    }
+                });
+            }
+        });
+    }
+
+    /** Copia al portapapeles lo que devuelve SurfaceFlinger para el juego abierto, para depurar los FPS. */
+    private void copyDiagnostic() {
+        final String p = pkg;
+        if (!Shizuku.ready() || p == null || !Sys.PACKAGE_NAME.matcher(p).matches()) {
+            Sys.toast(ctx, "Abre el panel dentro de un juego, con Shizuku conectado");
+            return;
+        }
+        Sys.toast(ctx, "Preparando el diagnóstico…");
+        Sys.BG.execute(new Runnable() {
+            @Override
+            public void run() {
+                String list = Shell.run("dumpsys SurfaceFlinger --list | grep -F '" + p + "'", 5000);
+                String layer = list != null ? StatsEngine.pickLayer(list, p) : null;
+                String out = Shell.run("echo \"Pulso 1.0.2 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
+                        + "echo '== capas'; dumpsys SurfaceFlinger --list | grep -F '" + p + "'; "
+                        + "echo '== latency'; " + (layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "' | head -n 6" : "echo sin capa") + "; "
+                        + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
+                        + "dumpsys SurfaceFlinger --timestats -dump | grep -B2 -A14 -F '" + p + "' | head -n 60", 12000);
+                final String text = out != null ? out : "Shizuku no respondió";
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        android.content.ClipboardManager cm = ctx.getSystemService(android.content.ClipboardManager.class);
+                        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("Diagnóstico de Pulso", text));
+                        Sys.toast(ctx, "Diagnóstico copiado: pégaselo a Claude");
                     }
                 });
             }

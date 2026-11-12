@@ -29,6 +29,11 @@ enum Mode {
 
     String describe(boolean shizuku, float maxHz) {
         String hz = Ui.f0(maxHz);
+        if (maxHz < 61f) { // pantalla fija a 60 Hz (p. ej. la Tab S7 FE): solo cambia el modo de juego
+            if (this == PERFORMANCE) return "El juego en modo rendimiento. Esta pantalla va siempre a 60 Hz.";
+            if (this == SAVER) return "El juego en modo ahorro, sin activar el ahorro de batería. Esta pantalla va siempre a 60 Hz.";
+            return "Lo decide el sistema, como siempre.";
+        }
         if (this == PERFORMANCE) {
             return shizuku
                     ? "Pantalla fija a " + hz + " Hz y el juego en modo rendimiento."

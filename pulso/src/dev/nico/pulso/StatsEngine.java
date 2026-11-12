@@ -48,7 +48,9 @@ final class StatsEngine {
     private Stats last;
 
     // Estado del muestreo: solo se toca en el hilo de fondo.
-    private String fpsLayer;
+    private String fpsLayer, fpsPkg;
+    private int latencyMisses;
+    private boolean useTimestats, timestatsOn;
     private long lastPresent = -1;
     private long lastTotal = -1, lastIdle;
     private int tick;
@@ -79,6 +81,7 @@ final class StatsEngine {
     void shutdown() {
         listeners.clear();
         active = false;
+        if (bg != null) bg.post(stopTimestats);
         if (thread != null) {
             thread.quitSafely();
             thread = null;
@@ -101,6 +104,7 @@ final class StatsEngine {
             bg.post(loop);
         } else if (bg != null) {
             bg.removeCallbacks(loop);
+            bg.post(stopTimestats);
         }
     }
 
@@ -110,6 +114,17 @@ final class StatsEngine {
             lastPresent = -1;
             lastTotal = -1;
             fpsLayer = null;
+            fpsPkg = null;
+        }
+    };
+
+    /** Al dejar de medir, se apagan las estadísticas de SurfaceFlinger (gastan un poco). */
+    private final Runnable stopTimestats = new Runnable() {
+        @Override
+        public void run() {
+            if (!timestatsOn) return;
+            timestatsOn = false;
+            Shell.run("dumpsys SurfaceFlinger --timestats -disable -clear >/dev/null", 3000);
         }
     };
 
@@ -212,14 +227,24 @@ final class StatsEngine {
     }
 
     private void privileged(Stats s, boolean slow) {
-        // Cada 3 s se busca la capa del juego (su SurfaceView) para leer sus tiempos de frame.
-        boolean findLayer = tick % 3 == 0;
-        String pkg = findLayer ? Sys.foregroundPackage(app) : null;
+        // Cada 3 s se mira qué juego está delante y, con --latency, cuál es su capa (su SurfaceView).
+        boolean find = tick % 3 == 0;
+        if (find) fpsPkg = Sys.foregroundPackage(app);
+        String pkg = fpsPkg;
         String layer = fpsLayer;
+        String fpsCmd = "true";
+        if (pkg != null) {
+            if (useTimestats) {
+                fpsCmd = (timestatsOn ? "" : "dumpsys SurfaceFlinger --timestats -enable >/dev/null; ")
+                        + "dumpsys SurfaceFlinger --timestats -dump -clear";
+            } else if (layer != null) {
+                fpsCmd = "dumpsys SurfaceFlinger --latency '" + layer + "'";
+            }
+        }
+        boolean list = find && pkg != null && !useTimestats;
         StringBuilder cmd = new StringBuilder();
-        cmd.append(findLayer && pkg != null ? "dumpsys SurfaceFlinger --list" : "true");
-        cmd.append("; echo @@; ");
-        cmd.append(layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "'" : "true");
+        cmd.append(list ? "dumpsys SurfaceFlinger --list" : "true");
+        cmd.append("; echo @@; ").append(fpsCmd);
         cmd.append("; echo @@; head -n 1 /proc/stat; echo @@; cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null");
         if (slow) cmd.append("; echo @@; dumpsys thermalservice 2>/dev/null");
         String out = Shell.run(cmd.toString(), 3000);
@@ -228,15 +253,57 @@ final class StatsEngine {
             return;
         }
         String[] parts = out.split("@@\n", -1);
-        if (findLayer) {
-            String picked = pkg != null ? pickLayer(parts[0], pkg) : null;
-            if (picked == null || !picked.equals(fpsLayer)) lastPresent = -1;
-            fpsLayer = picked;
+        if (pkg != null && useTimestats) {
+            if (timestatsOn && parts.length > 1) s.fps = timestatsFps(parts[1], pkg, s.maxRefresh);
+            timestatsOn = true;
+        } else {
+            if (list) {
+                String picked = pickLayer(parts[0], pkg);
+                if (picked == null || !picked.equals(fpsLayer)) lastPresent = -1;
+                fpsLayer = picked;
+                if (picked == null) latencyMisses++;
+            }
+            if (layer != null && layer.equals(fpsLayer) && parts.length > 1) {
+                if (latency(s, parts[1])) latencyMisses = 0;
+                else latencyMisses++;
+            }
+            // Si --latency no da datos en este móvil, se pasa a las estadísticas de SurfaceFlinger.
+            if (latencyMisses >= 3) useTimestats = true;
         }
-        if (layer != null && layer.equals(fpsLayer) && parts.length > 1) latency(s, parts[1]);
         if (parts.length > 2) cpuLoad(s, parts[2]);
         if (parts.length > 3) cpuFreq(s, parts[3]);
         if (slow && parts.length > 4) thermal(parts[4]);
+    }
+
+    /** FPS medios del último segundo de la capa del juego, según «dumpsys SurfaceFlinger --timestats». */
+    static float timestatsFps(String text, String pkg, float maxRefresh) {
+        String[] blocks = text.split("layerName = ");
+        float best = 0f;
+        long bestFrames = -1;
+        for (int i = 1; i < blocks.length; i++) {
+            String b = blocks[i];
+            int nl = b.indexOf('\n');
+            String name = nl > 0 ? b.substring(0, nl) : b;
+            if (!name.contains(pkg) && !b.contains("packageName = " + pkg)) continue;
+            long frames = (long) field(b, "totalFrames = ");
+            float fps = field(b, "averageFPS = ");
+            if (Float.isNaN(fps) || frames <= bestFrames) continue;
+            bestFrames = frames;
+            best = fps;
+        }
+        float cap = maxRefresh > 0 ? maxRefresh + 1f : 241f;
+        return Math.min(best, cap);
+    }
+
+    private static float field(String block, String key) {
+        int i = block.indexOf(key);
+        if (i < 0) return Float.NaN;
+        int end = block.indexOf('\n', i);
+        try {
+            return Float.parseFloat(block.substring(i + key.length(), end > 0 ? end : block.length()).trim());
+        } catch (NumberFormatException e) {
+            return Float.NaN;
+        }
     }
 
     /** La capa que dibuja el juego: su SurfaceView (la de BLAST si hay), o si no la de su ventana. */
@@ -259,7 +326,8 @@ final class StatsEngine {
     }
 
     /** FPS a partir de los últimos 128 tiempos de presentación de la capa (en ns). */
-    private void latency(Stats s, String text) {
+    /** false si la capa no ha dado ningún tiempo de frame. */
+    private boolean latency(Stats s, String text) {
         String[] lines = text.split("\n");
         long[] ts = new long[lines.length];
         int n = 0;
@@ -270,12 +338,12 @@ final class StatsEngine {
             if (t <= 0) t = nanos(f[2]);
             if (t > 0) ts[n++] = t;
         }
-        if (n < 2) return;
+        if (n < 2) return false;
         Arrays.sort(ts, 0, n);
         long newest = ts[n - 1];
         if (newest == lastPresent) { // ningún frame nuevo desde la última lectura
             s.fps = 0f;
-            return;
+            return true;
         }
         lastPresent = newest;
         long from = newest - 1_000_000_000L;
@@ -291,6 +359,7 @@ final class StatsEngine {
             float cap = s.maxRefresh > 0 ? s.maxRefresh + 1f : 241f;
             s.fps = Math.min((count - 1) * 1e9f / (newest - oldest), cap);
         }
+        return true;
     }
 
     private static long nanos(String v) {
