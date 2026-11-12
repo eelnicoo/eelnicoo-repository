@@ -65,7 +65,8 @@ final class StatsEngine {
     private long lastTotal = -1, lastIdle;
     private int tick;
     private float headroom = Float.NaN, cpuT = Float.NaN, gpuT = Float.NaN, skinT = Float.NaN;
-    private long cpuOk, gpuOk, skinOk;
+    private long cpuOk, gpuOk, skinOk, fpsOk;
+    private float lastFps = Float.NaN;
     private final float[] hFps = nan(), hPow = nan(), hCpu = nan(), hBat = nan();
     private List<String[]> zones;
 
@@ -221,6 +222,14 @@ final class StatsEngine {
             fpsLayer = null;
             if (slow) sysfs();
         }
+        // Si una lectura de FPS falla, se mantiene la última unos segundos (que no salte a Hz).
+        long now = SystemClock.uptimeMillis();
+        if (Stats.ok(s.fps)) {
+            lastFps = s.fps;
+            fpsOk = now;
+        } else if (s.shizuku && Stats.ok(lastFps) && now - fpsOk < 6000) {
+            s.fps = lastFps;
+        }
         s.cpuTemp = cpuT;
         s.gpuTemp = gpuT;
         s.skinTemp = skinT;
@@ -340,7 +349,7 @@ final class StatsEngine {
             bestFrames = frames;
             best = fps;
         }
-        float cap = maxRefresh > 0 ? maxRefresh + 1f : 241f;
+        float cap = maxRefresh > 0 ? maxRefresh : 240f;
         return Math.min(best, cap);
     }
 
@@ -405,7 +414,7 @@ final class StatsEngine {
             }
         }
         if (count >= 2 && newest > oldest) {
-            float cap = s.maxRefresh > 0 ? s.maxRefresh + 1f : 241f;
+            float cap = s.maxRefresh > 0 ? s.maxRefresh : 240f;
             s.fps = Math.min((count - 1) * 1e9f / (newest - oldest), cap);
         }
         return true;

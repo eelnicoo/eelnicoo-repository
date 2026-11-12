@@ -62,7 +62,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ModeSelector modes;
     private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
-    private ToggleTile gHud, gDnd, gBright, gAwake, gShot, gRam;
+    private ToggleTile gHud, gDnd, gBright, gAwake, gNight, gRam;
     private String pkg;
     private Mode mode = Mode.BALANCED;
     private float maxHz = 60f;
@@ -439,7 +439,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         gDnd = new ToggleTile(c, R.drawable.ic_moon, "No molestar", h);
         gBright = new ToggleTile(c, R.drawable.ic_sun, "Brillo fijo", h);
         gAwake = new ToggleTile(c, R.drawable.ic_cup, "No apagar", h);
-        gShot = new ToggleTile(c, R.drawable.ic_capture, "Captura", h);
+        gNight = new ToggleTile(c, R.drawable.ic_night, "Modo noche", h);
         gRam = new ToggleTile(c, R.drawable.ic_sparkle, "Liberar RAM", h);
 
         gHud.setOnClickListener(new View.OnClickListener() {
@@ -490,20 +490,17 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 }
             }
         });
-        gShot.setOnClickListener(new View.OnClickListener() {
+        gNight.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (!Shizuku.ready()) {
-                    Sys.toast(c, "La captura desde el panel necesita Shizuku");
+                if (!Shizuku.ready()) { // sin Shizuku no se puede cambiar: se abren sus ajustes
+                    close();
+                    Sys.open(c, new Intent(Settings.ACTION_NIGHT_DISPLAY_SETTINGS));
                     return;
                 }
-                close();
-                main.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        Shell.async("input keyevent 120"); // KEYCODE_SYSRQ: la captura del sistema
-                    }
-                }, 450);
+                boolean on = !gNight.isActive();
+                gNight.setActive(on);
+                Shell.async("settings put secure night_display_activated " + (on ? 1 : 0));
             }
         });
         gRam.setOnClickListener(new View.OnClickListener() {
@@ -526,7 +523,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 });
             }
         });
-        return grid(c, new View[] {gHud, gDnd, gBright, gAwake, gShot, gRam}, 3);
+        return grid(c, new View[] {gHud, gDnd, gBright, gAwake, gNight, gRam}, 3);
     }
 
     private void refreshToggles() {
@@ -536,16 +533,32 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         gDnd.setActive(Sys.dndOn(ctx));
         gBright.setActive(!Sys.autoBrightness(ctx));
         boolean sz = Shizuku.ready();
-        gShot.setAvailable(sz);
+        gNight.setAvailable(sz);
         gRam.setAvailable(sz);
+        if (sz) {
+            Sys.BG.execute(new Runnable() {
+                @Override
+                public void run() {
+                    String v = Shell.run("settings get secure night_display_activated", 3000);
+                    final boolean on = v != null && v.trim().equals("1");
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (open) gNight.setActive(on);
+                        }
+                    });
+                }
+            });
+        }
         hint.setVisibility(sz ? View.GONE : View.VISIBLE);
         modeDesc.setText(mode.describe(sz, maxHz));
     }
 
     private void applyAccent(boolean animate) {
         root.setAccent(mode.c1, mode.c2, animate);
-        ToggleTile[] all = {gHud, gDnd, gBright, gAwake, gShot, gRam};
+        ToggleTile[] all = {gHud, gDnd, gBright, gAwake, gRam};
         for (ToggleTile t : all) t.setAccent(mode.c1, mode.c2);
+        gNight.setAccent(0xFFFFB25B, 0xFFFF7A3D); // siempre en naranja, como la luz nocturna
         if (pkg == null) appIcon.setImageDrawable(badge(ctx));
     }
 
@@ -583,7 +596,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             public void run() {
                 String list = Shell.run("dumpsys SurfaceFlinger --list | grep -F '" + p + "'", 5000);
                 String layer = list != null ? StatsEngine.pickLayer(list, p) : null;
-                String out = Shell.run("echo \"Pulso 1.0.3 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
+                String out = Shell.run("echo \"Pulso 1.0.4 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
                         + "echo '== capas'; dumpsys SurfaceFlinger --list | grep -F '" + p + "'; "
                         + "echo '== latency'; " + (layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "' | head -n 6" : "echo sin capa") + "; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
@@ -666,8 +679,9 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         }
 
         float max = s.maxRefresh > 0 ? s.maxRefresh : 60f;
-        if (Stats.ok(s.fps)) {
-            tFps.set("FPS", Ui.f0(s.fps), "", Ui.f0(s.refresh) + " Hz", s.fps / max, mode.c1);
+        if (s.shizuku || Stats.ok(s.fps)) { // con Shizuku, siempre FPS (aunque una lectura falle)
+            tFps.set("FPS", Stats.ok(s.fps) ? Ui.f0(s.fps) : "—", "", Ui.f0(s.refresh) + " Hz",
+                    Stats.ok(s.fps) ? s.fps / max : 0f, mode.c1);
         } else {
             tFps.set("PANTALLA", Ui.f0(s.refresh), "Hz", "máx. " + Ui.f0(max), s.refresh / max, mode.c1);
         }

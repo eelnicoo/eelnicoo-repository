@@ -36,7 +36,7 @@ final class HudView extends View {
     }
 
     void update(Stats s) {
-        String a = Stats.ok(s.fps) ? Ui.f0(s.fps) + " FPS" : Ui.f0(s.refresh) + " Hz";
+        String a = Stats.ok(s.fps) ? Ui.f0(s.fps) + " FPS" : (s.shizuku ? "— FPS" : Ui.f0(s.refresh) + " Hz");
         String b;
         int bc;
         if (Stats.ok(s.cpuTemp)) {

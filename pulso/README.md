@@ -12,7 +12,7 @@ translúcido y desenfocado con:
 - **Datos en vivo**: temperatura de CPU, GPU y batería, FPS, consumo en vatios, RAM y estado térmico,
   con una gráfica del último minuto.
 - **Botones rápidos**: HUD flotante de rendimiento, No molestar, brillo fijo, no apagar la pantalla,
-  captura y liberar RAM.
+  modo noche (luz nocturna) y liberar RAM.
 - **HUD**: una píldora siempre visible con FPS, temperatura, consumo y batería. No recibe toques.
 - Notificación silenciosa con los tres modos, un mosaico de ajustes rápidos y arranque al encender.
 
@@ -33,7 +33,7 @@ Pulso usa [Shizuku](https://shizuku.rikka.app/), que funciona sin root con la de
 | Temperatura CPU / GPU | solo si el sistema deja leer `/sys` (normalmente no) | sí (HAL térmico) |
 | FPS reales | no (se muestra la frecuencia de la pantalla) | sí (contador de SurfaceFlinger) |
 | Batería, consumo, RAM, estado térmico | sí | sí |
-| Captura y liberar RAM | no | sí |
+| Modo noche y liberar RAM | abre los ajustes / no | sí |
 
 Con Shizuku, Pulso guarda los valores originales de `peak_refresh_rate` y `min_refresh_rate`
 y los restaura al volver a Equilibrado o al desactivar el panel.

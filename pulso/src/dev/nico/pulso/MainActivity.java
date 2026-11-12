@@ -400,7 +400,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 "Limitar de verdad a 60 FPS en Ahorro y fijar 120 Hz en Rendimiento",
                 "Leer la temperatura de la CPU y la GPU",
                 "Medir los FPS reales del juego",
-                "Hacer capturas y liberar RAM desde el panel",
+                "Modo noche y liberar RAM desde el panel",
         };
         for (String s : items) card.addView(bullet(s));
 
