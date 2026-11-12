@@ -156,9 +156,9 @@ final class EdgeGlow {
     private void layout() {
         Rect b = wm.getCurrentWindowMetrics().getBounds();
         WindowInsets wi = wm.getCurrentWindowMetrics().getWindowInsets();
-        // Radio real de las esquinas de la pantalla. Si el sistema no lo da (la tablet), esquinas rectas.
+        // Radio real de las esquinas de la pantalla. Si el sistema no lo da (la tablet), uno suave de 20 dp.
         RoundedCorner rc = wi.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT);
-        radius = rc != null ? Math.max(0, rc.getRadius()) : 0f;
+        radius = rc != null && rc.getRadius() > 0 ? rc.getRadius() : Ui.dpf(20);
         // Por encima de la barra de apps o de los botones si se ven (con gestos no hay nada que tocar: 0).
         Insets n = barsKnown ? bars : wi.getInsets(WindowInsets.Type.tappableElement());
         int left = n.left, top = 0, right = b.width() - n.right, bottom = b.height() - n.bottom;
