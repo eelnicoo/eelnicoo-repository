@@ -96,7 +96,7 @@ final class ModeController {
         } else {
             // Desde Android 14, peak_refresh_rate también limita los FPS a los que dibuja el sistema:
             // a 30, los juegos van a 30 aunque el panel siga a 60 Hz.
-            int fps = Prefs.saverFps(c);
+            int fps = m.fpsLimit();
             cmd.append("settings put system peak_refresh_rate ").append(rate(fps)).append("; ");
             cmd.append("settings put system min_refresh_rate ").append(saverMin(p.getString(Prefs.ORIG_MIN, null), fps)).append("; ");
         }
@@ -104,8 +104,8 @@ final class ModeController {
         if (pkg != null && Sys.PACKAGE_NAME.matcher(pkg).matches()) {
             // Límite de FPS solo para el juego (modo de juego de Android): sirve donde el ajuste
             // global no baja de los Hz de la pantalla (la tablet, con su panel fijo a 60 Hz).
-            if (m == Mode.SAVER) {
-                cmd.append("cmd game set --mode 3 --fps ").append(Prefs.saverFps(c)).append(' ').append(pkg).append(" >/dev/null 2>&1; ");
+            if (m.saving()) {
+                cmd.append("cmd game set --mode 3 --fps ").append(m.fpsLimit()).append(' ').append(pkg).append(" >/dev/null 2>&1; ");
             }
             cmd.append("cmd game mode ").append(m == Mode.PERFORMANCE ? "performance " : "battery ")
                     .append(pkg).append(" >/dev/null 2>&1; ");

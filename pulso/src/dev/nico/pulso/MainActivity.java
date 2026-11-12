@@ -37,7 +37,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private TextView szStatus, szButton, szSteps;
     private View szDot;
     private PermRow pOverlay, pNotif, pUsage, pWrite;
-    private Segmented sideSeg, hudSeg, saverSeg;
+    private Segmented sideSeg, hudSeg;
     private Slider posSlider, sizeSlider, alphaSlider;
     private TextView posVal, sizeVal, alphaVal;
     private ToggleSwitch tapSw, hudSw, awakeSw, bootSw;
@@ -213,8 +213,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         mainButton.setText(on ? "Desactivar" : "Activar");
         openButton.setVisibility(on ? View.VISIBLE : View.GONE);
 
-        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this), Prefs.saverFps(this)));
-        saverSeg.select(Prefs.saverFps(this) == 30 ? 1 : 0, false);
+        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this)));
 
         Shizuku.State st = Shizuku.state(this);
         int dotColor;
@@ -349,7 +348,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
 
     private void buildMode() {
         LinearLayout card = card("Modo");
-        modes = new ModeSelector(this, false);
+        modes = new ModeSelector(this, false, Mode.available(Sys.maxRefresh(this)));
         modes.setMode(Prefs.mode(this), false);
         modes.setListener(new ModeSelector.Listener() {
             @Override
@@ -361,22 +360,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         modeDesc = Ui.text(this, "", 13.5f, Ui.TEXT2, Ui.REGULAR);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
         card.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(2), Ui.dp(12), Ui.dp(2), 0));
-        card.addView(label("Límite en Ahorro"), Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, 0));
-        saverSeg = new Segmented(this, "60 FPS", "30 FPS");
-        saverSeg.setListener(new Segmented.Listener() {
-            @Override
-            public void onSelect(Segmented s, int index) {
-                Prefs.put(MainActivity.this, Prefs.SAVER_FPS, index == 1 ? 30 : 60);
-                // Si el panel no está activo, el servicio no lo verá: se aplica aquí.
-                if (!PulsoService.running && Prefs.mode(MainActivity.this) == Mode.SAVER) {
-                    ModeController.apply(MainActivity.this, Mode.SAVER);
-                }
-            }
-        });
-        card.addView(saverSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
-        TextView saverTip = Ui.text(this, "Con Shizuku. A 30 FPS se gasta bastante menos batería y el móvil se calienta menos.",
-                12.5f, Ui.TEXT3, Ui.REGULAR);
-        card.addView(saverTip, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
         content.addView(card, cardLp());
     }
 

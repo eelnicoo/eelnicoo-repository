@@ -4,12 +4,13 @@ Panel de juego para el Pixel 10 con GrapheneOS, al estilo del de los realme GT.
 Deslizas desde el borde de la pantalla y aparece, encima del juego, un panel de cristal
 translúcido y desenfocado con:
 
-- **Tres modos**: Rendimiento, Equilibrado y Ahorro. Ninguno activa el ahorro de batería del sistema.
+- **Cuatro modos**: Rendimiento, Equilibrado, Ahorro y Eco. Ninguno activa el ahorro de batería del sistema.
   - **Rendimiento**: pantalla fija a la frecuencia máxima (120 Hz) y el juego en modo rendimiento
     (API de modos de juego de Android).
   - **Equilibrado**: lo que decida el sistema, sin tocar nada.
-  - **Ahorro**: pantalla y juegos limitados a **60 o 30 FPS** (a elegir; 30 de serie en pantallas de 60 Hz,
-    como la de la tablet), sin modo ahorro.
+  - **Ahorro**: pantalla y juegos limitados a **60 FPS**, sin modo ahorro.
+  - **Eco**: juegos a **30 FPS** y el juego en modo batería, para que el procesador trabaje menos y baje
+    de frecuencia (limitar los GHz directamente necesita root). Solo en pantallas de más de 60 Hz.
 - **Datos en vivo**: temperatura de CPU, GPU y batería, FPS, consumo en vatios, RAM y estado térmico,
   con una gráfica del último minuto.
 - **Botones rápidos**: HUD flotante de rendimiento, mejora táctil (mayor sensibilidad táctil y animaciones

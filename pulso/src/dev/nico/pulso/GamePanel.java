@@ -60,7 +60,6 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ImageView appIcon;
     private TextView title, subtitle, clock, battery, modeDesc, hint;
     private ModeSelector modes;
-    private Segmented saverSeg;
     private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
     private ToggleTile gHud, gTouch, gBright, gAwake, gNight, gRam;
@@ -282,7 +281,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         int gap = Ui.dp(10);
         col.addView(header(c), Ui.lp(Ui.MATCH, Ui.WRAP));
 
-        modes = new ModeSelector(c, true);
+        modes = new ModeSelector(c, true, Mode.available(maxHz));
         modes.setMode(mode, false);
         modes.setListener(new ModeSelector.Listener() {
             @Override
@@ -291,23 +290,8 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 // El servicio verá el cambio en los ajustes y llamará a onModeChanged().
             }
         });
-        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz, Prefs.saverFps(ctx)), 11.5f, Ui.TEXT2, Ui.MEDIUM);
+        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz), 11.5f, Ui.TEXT2, Ui.MEDIUM);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
-        // Límite de Ahorro a mano (solo donde bajar a 30 funciona: pantallas de más de 60 Hz).
-        saverSeg = null;
-        if (maxHz >= 61f) {
-            saverSeg = new Segmented(c, "Ahorro · 60 FPS", "Ahorro · 30 FPS").compact();
-            saverSeg.select(Prefs.saverFps(c) == 30 ? 1 : 0, false);
-            saverSeg.setListener(new Segmented.Listener() {
-                @Override
-                public void onSelect(Segmented s, int index) {
-                    Prefs.put(ctx, Prefs.SAVER_FPS, index == 1 ? 30 : 60);
-                    modeDesc.setText(mode.describe(Shizuku.ready(), maxHz, Prefs.saverFps(ctx)));
-                    if (mode == Mode.SAVER) ModeController.select(ctx, Mode.SAVER, pkg, false);
-                }
-            });
-        }
-
         int tileH = land ? 76 : 82;
         tCpu = new MetricTile(c, "CPU", tileH);
         tTerm = new MetricTile(c, "TÉRMICO", tileH);
@@ -339,9 +323,8 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             LinearLayout bcol = Ui.column(c);
             bcol.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP));
             bcol.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (saverSeg != null) bcol.addView(saverSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             bcol.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
-            cols.addView(a, Ui.lp(0, Ui.WRAP, 1.6f));
+            cols.addView(a, Ui.lp(0, Ui.WRAP, 1.45f));
             LinearLayout.LayoutParams bp = Ui.lp(0, Ui.WRAP, 1f);
             bp.leftMargin = Ui.dp(12);
             cols.addView(bcol, bp);
@@ -349,7 +332,6 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         } else {
             col.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
-            if (saverSeg != null) col.addView(saverSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(grid, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(spark, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap, 0, 0));
@@ -567,7 +549,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             });
         }
         hint.setVisibility(sz ? View.GONE : View.VISIBLE);
-        modeDesc.setText(mode.describe(sz, maxHz, Prefs.saverFps(ctx)));
+        modeDesc.setText(mode.describe(sz, maxHz));
     }
 
     private void applyAccent(boolean animate) {
@@ -612,7 +594,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.0.10 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.1.0 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
@@ -647,7 +629,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         if (!open || m == mode) return;
         mode = m;
         if (modes.mode() != m) modes.setMode(m, true);
-        modeDesc.setText(m.describe(Shizuku.ready(), maxHz, Prefs.saverFps(ctx)));
+        modeDesc.setText(m.describe(Shizuku.ready(), maxHz));
         applyAccent(true);
         Stats last = svc.stats().last();
         if (last != null) onStats(last);

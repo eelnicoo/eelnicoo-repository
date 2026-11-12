@@ -18,7 +18,6 @@ final class Prefs {
     static final String HUD_POS = "hud_pos";    // 0 izquierda, 1 centro, 2 derecha
     static final String AWAKE = "awake";        // no apagar la pantalla
     static final String BOOT = "boot";
-    static final String SAVER_FPS = "saver_fps"; // límite de Ahorro: 60 o 30
     // Valores originales de la frecuencia, para dejarlo todo como estaba.
     static final String ORIG_SAVED = "orig_saved";
     static final String ORIG_PEAK = "orig_peak";
@@ -67,11 +66,6 @@ final class Prefs {
 
     static boolean awake(Context c) {
         return get(c).getBoolean(AWAKE, false);
-    }
-
-    /** 30 de serie en pantallas de 60 Hz (en ellas limitar a 60 no ahorra nada); si no, 60. */
-    static int saverFps(Context c) {
-        return get(c).getInt(SAVER_FPS, Sys.maxRefresh(c) < 61f ? 30 : 60);
     }
 
     static boolean boot(Context c) {

@@ -20,36 +20,45 @@ final class ModeSelector extends View {
         void onModeSelected(Mode m);
     }
 
-    private static final Mode[] MODES = Mode.values();
+    private final Mode[] modes;
 
-    private final Drawable[] icons = new Drawable[MODES.length];
+    private final Drawable[] icons;
     private final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint trackStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ind = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint gloss = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint label;
+    private final float labelSize;
     private final RectF r = new RectF();
     private final RectF ir = new RectF();
     private final int heightPx;
 
     private Mode mode = Mode.BALANCED;
-    private float pos = Mode.BALANCED.ordinal();
+    private float pos = 1f;
     private int c1 = Mode.BALANCED.c1, c2 = Mode.BALANCED.c2;
     private ValueAnimator anim;
     private Listener listener;
 
-    ModeSelector(Context c, boolean compact) {
+    ModeSelector(Context c, boolean compact, Mode[] modes) {
         super(c);
+        this.modes = modes;
+        this.icons = new Drawable[modes.length];
         heightPx = Ui.dp(compact ? 62 : 68);
-        for (int i = 0; i < MODES.length; i++) icons[i] = c.getDrawable(MODES[i].icon).mutate();
+        for (int i = 0; i < modes.length; i++) icons[i] = c.getDrawable(modes[i].icon).mutate();
         track.setColor(Ui.TILE);
         trackStroke.setStyle(Paint.Style.STROKE);
         trackStroke.setStrokeWidth(Math.max(1f, Ui.dpf(1)));
         trackStroke.setColor(Ui.TILE_STROKE);
         label = Ui.paint(compact ? 11f : 12.5f, Ui.TEXT2, Ui.SEMIBOLD);
+        labelSize = Ui.dpf(compact ? 11f : 12.5f);
         label.setTextAlign(Paint.Align.CENTER);
         setClickable(true);
         setContentDescription("Modo");
+    }
+
+    private int index(Mode m) {
+        for (int i = 0; i < modes.length; i++) if (modes[i] == m) return i;
+        return 0;
     }
 
     void setListener(Listener l) {
@@ -64,7 +73,7 @@ final class ModeSelector extends View {
         if (anim != null) anim.cancel();
         mode = m;
         if (!animate || !isAttachedToWindow()) {
-            pos = m.ordinal();
+            pos = index(m);
             c1 = m.c1;
             c2 = m.c2;
             invalidate();
@@ -79,7 +88,7 @@ final class ModeSelector extends View {
             @Override
             public void onAnimationUpdate(ValueAnimator a) {
                 float t = (float) a.getAnimatedValue();
-                pos = from + (m.ordinal() - from) * t;
+                pos = from + (index(m) - from) * t;
                 c1 = Ui.mix(f1, m.c1, t);
                 c2 = Ui.mix(f2, m.c2, t);
                 invalidate();
@@ -102,7 +111,7 @@ final class ModeSelector extends View {
         cv.drawRoundRect(r, radius, radius, track);
         cv.drawRoundRect(r, radius, radius, trackStroke);
 
-        float seg = (w - 2 * p) / MODES.length;
+        float seg = (w - 2 * p) / modes.length;
         ir.set(p + pos * seg, p, p + pos * seg + seg, h - p);
         float ri = radius - p;
         ind.setShader(new LinearGradient(ir.left, ir.top, ir.right, ir.bottom, c1, c2, Shader.TileMode.CLAMP));
@@ -112,14 +121,20 @@ final class ModeSelector extends View {
         cv.drawRoundRect(ir, ri, ri, gloss);
 
         float iconSize = Ui.dpf(20);
-        for (int i = 0; i < MODES.length; i++) {
+        for (int i = 0; i < modes.length; i++) {
             float sel = Math.max(0f, 1f - Math.abs(pos - i));
             int col = Ui.mix(Ui.TEXT2, Ui.INK, sel);
             float cx = p + seg * i + seg / 2f;
             Ui.drawIcon(cv, icons[i], cx, h * 0.39f, iconSize, col);
             label.setColor(col);
             label.setTypeface(sel > 0.5f ? Ui.BOLD : Ui.SEMIBOLD);
-            cv.drawText(Ui.fit(label, MODES[i].label, seg - Ui.dpf(6)), cx, h * 0.80f, label);
+            float avail = seg - Ui.dpf(6), size = labelSize;
+            label.setTextSize(size);
+            while (label.measureText(modes[i].label) > avail && size > Ui.dpf(8.5f)) {
+                size -= Ui.dpf(0.5f);
+                label.setTextSize(size);
+            }
+            cv.drawText(Ui.fit(label, modes[i].label, avail), cx, h * 0.80f, label);
         }
     }
 
@@ -129,11 +144,11 @@ final class ModeSelector extends View {
         int action = e.getActionMasked();
         if (action == MotionEvent.ACTION_UP) {
             float p = Ui.dpf(4);
-            float seg = (getWidth() - 2 * p) / MODES.length;
+            float seg = (getWidth() - 2 * p) / modes.length;
             int i = (int) ((e.getX() - p) / seg);
-            i = Math.max(0, Math.min(MODES.length - 1, i));
-            if (MODES[i] != mode) {
-                setMode(MODES[i], true);
+            i = Math.max(0, Math.min(modes.length - 1, i));
+            if (modes[i] != mode) {
+                setMode(modes[i], true);
                 performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
                 if (listener != null) listener.onModeSelected(mode);
             }

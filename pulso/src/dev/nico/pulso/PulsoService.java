@@ -202,9 +202,6 @@ public class PulsoService extends Service
             case Prefs.HUD_POS:
                 hud.relayout();
                 break;
-            case Prefs.SAVER_FPS:
-                if (Prefs.mode(this) == Mode.SAVER) ModeController.apply(this, Mode.SAVER);
-                break;
             case Prefs.AWAKE:
                 handle.setKeepScreenOn(Prefs.awake(this));
                 break;
@@ -270,9 +267,13 @@ public class PulsoService extends Service
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setContentIntent(content)
                 .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
-        Mode[] all = Mode.values();
-        for (int i = 0; i < all.length; i++) {
+        // Android enseña como mucho 3 botones: los modos a los que se puede cambiar.
+        Mode[] all = Mode.available(Sys.maxRefresh(this));
+        int shown = 0;
+        for (int i = 0; i < all.length && shown < 3; i++) {
             Mode x = all[i];
+            if (x == m && all.length > 3) continue;
+            shown++;
             Intent it = new Intent(this, PulsoService.class).setAction(ACTION_MODE).putExtra(EXTRA_MODE, x.name());
             PendingIntent pi = PendingIntent.getService(this, 10 + i, it,
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
