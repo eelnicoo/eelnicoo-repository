@@ -1,0 +1,4 @@
+peak_refresh_rate en Ahorro: null
+min_refresh_rate en Ahorro: null
+peak_refresh_rate en Equilibrado: null
+min_refresh_rate en Equilibrado: null
