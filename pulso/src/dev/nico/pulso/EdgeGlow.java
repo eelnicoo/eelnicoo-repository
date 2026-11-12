@@ -2,6 +2,7 @@ package dev.nico.pulso;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Insets;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
@@ -40,6 +41,9 @@ final class EdgeGlow {
     private SweepGradient shader;
     private float radius, angle, cx, cy;
     private boolean shown;
+    /** Barras que se pueden tocar (barra de apps de la tablet o botones de navegación). */
+    private Insets bars = Insets.NONE;
+    private boolean barsKnown;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -92,6 +96,26 @@ final class EdgeGlow {
     private void show() {
         for (int i = 0; i < 4; i++) {
             strips[i] = new Strip(ctx);
+            if (i == 0) {
+                // Cuando aparece o se esconde la barra de apps, se recoloca el borde por encima de ella.
+                strips[0].setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+                    @Override
+                    public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                        Insets n = insets.getInsets(WindowInsets.Type.tappableElement());
+                        if (!barsKnown || !n.equals(bars)) {
+                            bars = n;
+                            barsKnown = true;
+                            main.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    relayout();
+                                }
+                            });
+                        }
+                        return insets;
+                    }
+                });
+            }
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(1, 1,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -132,15 +156,19 @@ final class EdgeGlow {
     private void layout() {
         Rect b = wm.getCurrentWindowMetrics().getBounds();
         WindowInsets wi = wm.getCurrentWindowMetrics().getWindowInsets();
+        // Radio real de las esquinas de la pantalla. Si el sistema no lo da (la tablet), esquinas rectas.
         RoundedCorner rc = wi.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT);
-        radius = rc != null && rc.getRadius() > 0 ? rc.getRadius() : Ui.dpf(36);
-        int w = b.width(), h = b.height();
+        radius = rc != null ? Math.max(0, rc.getRadius()) : 0f;
+        // Por encima de la barra de apps o de los botones si se ven (con gestos no hay nada que tocar: 0).
+        Insets n = barsKnown ? bars : wi.getInsets(WindowInsets.Type.tappableElement());
+        int left = n.left, top = 0, right = b.width() - n.right, bottom = b.height() - n.bottom;
+        int w = Math.max(1, right - left), h = Math.max(1, bottom - top);
         int t = Ui.dp(7); // grosor de cada tira (línea + brillo hacia dentro)
-        int corner = Math.round(radius) + t;
-        cx = w / 2f;
-        cy = h / 2f;
+        int corner = Math.max(t, Math.round(radius) + t);
         float inset = Ui.dpf(1.6f);
-        frame.set(inset, inset, w - inset, h - inset);
+        frame.set(left + inset, top + inset, right - inset, bottom - inset);
+        cx = frame.centerX();
+        cy = frame.centerY();
         shader = new SweepGradient(cx, cy, COLORS, null);
         matrix.setRotate(angle, cx, cy);
         shader.setLocalMatrix(matrix);
@@ -148,10 +176,10 @@ final class EdgeGlow {
         glow1.setShader(shader);
         glow2.setShader(shader);
         // arriba, abajo (con las esquinas), izquierda y derecha (entre ellas)
-        set(0, 0, 0, w, corner);
-        set(1, 0, h - corner, w, corner);
-        set(2, 0, corner, t, Math.max(1, h - 2 * corner));
-        set(3, w - t, corner, t, Math.max(1, h - 2 * corner));
+        set(0, left, top, w, corner);
+        set(1, left, bottom - corner, w, corner);
+        set(2, left, top + corner, t, Math.max(1, h - 2 * corner));
+        set(3, right - t, top + corner, t, Math.max(1, h - 2 * corner));
     }
 
     private void set(int i, int x, int y, int w, int h) {
