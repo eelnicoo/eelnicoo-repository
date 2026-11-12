@@ -6,11 +6,6 @@ enum Mode {
     BALANCED("Equilibrado", R.drawable.ic_balance, 0xFF3FD7FF, 0xFF6D7CFF),
     ECO("Eco", R.drawable.ic_eco, 0xFFD8F56B, 0xFF86CF45);
 
-    /** FPS máximos de Eco. */
-    int fpsLimit() {
-        return 30;
-    }
-
     boolean saving() {
         return this == ECO;
     }
@@ -40,7 +35,7 @@ enum Mode {
         return BALANCED;
     }
 
-    String describe(boolean shizuku, float maxHz) {
+    String describe(boolean shizuku, float maxHz, int ecoFps) {
         String hz = Ui.f0(maxHz);
         boolean fixed60 = maxHz < 61f; // pantalla fija a 60 Hz (p. ej. la Tab S7 FE)
         if (this == PERFORMANCE) {
@@ -52,8 +47,8 @@ enum Mode {
         if (this == ECO) {
             if (fixed60) return "El juego en modo batería, sin activar el ahorro de batería. Esta pantalla no baja de 60 FPS sin root.";
             return shizuku
-                    ? "Juegos a 30 FPS y el juego en modo batería: el procesador trabaja menos y baja de GHz. Sin el ahorro de batería."
-                    : "Con Shizuku, limita los juegos a 30 FPS para que el procesador trabaje menos.";
+                    ? "Juegos a " + ecoFps + " FPS y el juego en modo batería: el procesador trabaja menos y baja de GHz. Sin el ahorro de batería."
+                    : "Con Shizuku, limita los juegos a " + ecoFps + " FPS para que el procesador trabaje menos.";
         }
         return "La frecuencia la decide el sistema, como siempre.";
     }

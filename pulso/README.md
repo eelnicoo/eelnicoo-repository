@@ -8,7 +8,7 @@ translúcido y desenfocado con:
   - **Rendimiento**: pantalla fija a la frecuencia máxima (120 Hz) y el juego en modo rendimiento
     (API de modos de juego de Android).
   - **Equilibrado**: lo que decida el sistema, sin tocar nada.
-  - **Eco**: juegos a **30 FPS** y el juego en modo batería, para que el procesador trabaje menos y baje
+  - **Eco**: juegos a **30 o 60 FPS** (a elegir en el panel) y el juego en modo batería, para que el procesador trabaje menos y baje
     de frecuencia (limitar los GHz directamente necesita root). En pantallas fijas a 60 Hz solo cambia el modo de juego.
 - **Datos en vivo**: temperatura de CPU, GPU y batería, FPS, consumo en vatios, RAM y estado térmico,
   con una gráfica del último minuto.

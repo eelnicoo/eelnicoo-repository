@@ -60,6 +60,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
     private ImageView appIcon;
     private TextView title, subtitle, clock, battery, modeDesc, hint;
     private ModeSelector modes;
+    private Segmented ecoSeg;
     private MetricTile tCpu, tTerm, tGpu, tSkin, tFps, tBat, tPow, tRam;
     private Sparkline spark;
     private ToggleTile gHud, gTouch, gBright, gAwake, gNight, gRam;
@@ -290,8 +291,22 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
                 // El servicio verá el cambio en los ajustes y llamará a onModeChanged().
             }
         });
-        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz), 11.5f, Ui.TEXT2, Ui.MEDIUM);
+        modeDesc = Ui.textDp(c, mode.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)), 11.5f, Ui.TEXT2, Ui.MEDIUM);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
+        // Límite de Eco a mano (solo donde bajar de 60 funciona: pantallas de más de 60 Hz).
+        ecoSeg = null;
+        if (maxHz >= 61f) {
+            ecoSeg = new Segmented(c, "Eco · 30 FPS", "Eco · 60 FPS").compact();
+            ecoSeg.select(Prefs.ecoFps(c) == 60 ? 1 : 0, false);
+            ecoSeg.setListener(new Segmented.Listener() {
+                @Override
+                public void onSelect(Segmented s, int index) {
+                    Prefs.put(ctx, Prefs.ECO_FPS, index == 1 ? 60 : 30);
+                    modeDesc.setText(mode.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)));
+                    if (mode == Mode.ECO) ModeController.select(ctx, Mode.ECO, pkg, false);
+                }
+            });
+        }
         int tileH = land ? 76 : 82;
         tCpu = new MetricTile(c, "CPU", tileH);
         tTerm = new MetricTile(c, "TÉRMICO", tileH);
@@ -323,6 +338,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             LinearLayout bcol = Ui.column(c);
             bcol.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP));
             bcol.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
+            if (ecoSeg != null) bcol.addView(ecoSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             bcol.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(10), 0, 0));
             cols.addView(a, Ui.lp(0, Ui.WRAP, 1.45f));
             LinearLayout.LayoutParams bp = Ui.lp(0, Ui.WRAP, 1f);
@@ -332,6 +348,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         } else {
             col.addView(modes, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(4), Ui.dp(8), Ui.dp(4), 0));
+            if (ecoSeg != null) col.addView(ecoSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(grid, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap + Ui.dp(4), 0, 0));
             col.addView(spark, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
             col.addView(toggles, Ui.lp(Ui.MATCH, Ui.WRAP, 0, gap, 0, 0));
@@ -549,7 +566,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
             });
         }
         hint.setVisibility(sz ? View.GONE : View.VISIBLE);
-        modeDesc.setText(mode.describe(sz, maxHz));
+        modeDesc.setText(mode.describe(sz, maxHz, Prefs.ecoFps(ctx)));
     }
 
     private void applyAccent(boolean animate) {
@@ -594,7 +611,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String out = Shell.run("echo \"Pulso 1.1.1 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                String out = Shell.run("echo \"Pulso 1.1.2 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
                         + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
                         + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
@@ -629,7 +646,7 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
         if (!open || m == mode) return;
         mode = m;
         if (modes.mode() != m) modes.setMode(m, true);
-        modeDesc.setText(m.describe(Shizuku.ready(), maxHz));
+        modeDesc.setText(m.describe(Shizuku.ready(), maxHz, Prefs.ecoFps(ctx)));
         applyAccent(true);
         Stats last = svc.stats().last();
         if (last != null) onStats(last);

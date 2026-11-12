@@ -18,6 +18,7 @@ final class Prefs {
     static final String HUD_POS = "hud_pos";    // 0 izquierda, 1 centro, 2 derecha
     static final String AWAKE = "awake";        // no apagar la pantalla
     static final String BOOT = "boot";
+    static final String ECO_FPS = "eco_fps";    // límite de Eco: 30 o 60
     // Valores originales de la frecuencia, para dejarlo todo como estaba.
     static final String ORIG_SAVED = "orig_saved";
     static final String ORIG_PEAK = "orig_peak";
@@ -66,6 +67,10 @@ final class Prefs {
 
     static boolean awake(Context c) {
         return get(c).getBoolean(AWAKE, false);
+    }
+
+    static int ecoFps(Context c) {
+        return get(c).getInt(ECO_FPS, 30);
     }
 
     static boolean boot(Context c) {

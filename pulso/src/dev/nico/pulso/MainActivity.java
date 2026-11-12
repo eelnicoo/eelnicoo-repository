@@ -37,7 +37,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private TextView szStatus, szButton, szSteps;
     private View szDot;
     private PermRow pOverlay, pNotif, pUsage, pWrite;
-    private Segmented sideSeg, hudSeg;
+    private Segmented sideSeg, hudSeg, ecoSeg;
     private Slider posSlider, sizeSlider, alphaSlider;
     private TextView posVal, sizeVal, alphaVal;
     private ToggleSwitch tapSw, hudSw, awakeSw, bootSw;
@@ -213,7 +213,8 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         mainButton.setText(on ? "Desactivar" : "Activar");
         openButton.setVisibility(on ? View.VISIBLE : View.GONE);
 
-        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this)));
+        modeDesc.setText(m.describe(Shizuku.ready(), Sys.maxRefresh(this), Prefs.ecoFps(this)));
+        if (ecoSeg != null) ecoSeg.select(Prefs.ecoFps(this) == 60 ? 1 : 0, false);
 
         Shizuku.State st = Shizuku.state(this);
         int dotColor;
@@ -360,6 +361,21 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         modeDesc = Ui.text(this, "", 13.5f, Ui.TEXT2, Ui.REGULAR);
         modeDesc.setLineSpacing(Ui.dpf(2), 1f);
         card.addView(modeDesc, Ui.lp(Ui.MATCH, Ui.WRAP, Ui.dp(2), Ui.dp(12), Ui.dp(2), 0));
+        if (Sys.maxRefresh(this) >= 61f) {
+            card.addView(label("Límite en Eco"), Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, 0));
+            ecoSeg = new Segmented(this, "30 FPS", "60 FPS");
+            ecoSeg.setListener(new Segmented.Listener() {
+                @Override
+                public void onSelect(Segmented s, int index) {
+                    Prefs.put(MainActivity.this, Prefs.ECO_FPS, index == 1 ? 60 : 30);
+                    // Si el panel no está activo, el servicio no lo verá: se aplica aquí.
+                    if (!PulsoService.running && Prefs.mode(MainActivity.this) == Mode.ECO) {
+                        ModeController.apply(MainActivity.this, Mode.ECO);
+                    }
+                }
+            });
+            card.addView(ecoSeg, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(8), 0, 0));
+        }
         content.addView(card, cardLp());
     }
 
