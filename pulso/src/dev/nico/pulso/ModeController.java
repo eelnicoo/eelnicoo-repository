@@ -124,7 +124,7 @@ final class ModeController {
         return "settings put system " + key + " " + value + "; ";
     }
 
-    /** En Ahorro, el mínimo original si no pasa del límite; si no, 0 (si no, el mínimo anularía el límite). */
+    /** En Eco, el mínimo original si no pasa del límite; si no, 0 (si no, el mínimo anularía el límite). */
     private static String saverMin(String orig, int limit) {
         try {
             float v = Float.parseFloat(orig);

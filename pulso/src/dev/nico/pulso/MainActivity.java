@@ -398,7 +398,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         TextView why = Ui.text(this, "Sin root. Con Shizuku, Pulso puede:", 13.5f, Ui.TEXT2, Ui.REGULAR);
         card.addView(why, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(16), 0, Ui.dp(4)));
         String[] items = {
-                "Limitar de verdad a 60 FPS en Ahorro y fijar 120 Hz en Rendimiento",
+                "Limitar de verdad a 30 FPS en Eco y fijar 120 Hz en Rendimiento",
                 "Leer la temperatura de la CPU y la GPU",
                 "Medir los FPS reales del juego",
                 "Mejora táctil, modo noche y liberar RAM desde el panel",
