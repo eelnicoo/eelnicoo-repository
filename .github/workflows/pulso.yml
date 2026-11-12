@@ -1,0 +1,65 @@
+name: Pulso (compilar y probar en emulador)
+
+on:
+  push:
+    paths:
+      - 'pulso/**'
+      - '!pulso/capturas/**'
+      - '.github/workflows/pulso.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  emulador:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Herramientas de compilación
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq aapt dalvik-exchange zipalign apksigner >/dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "platforms;android-35" >/dev/null
+
+      - name: Compilar (con una clave de prueba)
+        run: |
+          ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar" \
+          RES_JAR="$ANDROID_HOME/platforms/android-34/android.jar" \
+          pulso/build.sh
+
+      - name: Descargar Shizuku
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --repo RikkaApps/Shizuku --pattern '*.apk' --output shizuku.apk
+
+      - name: Activar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Probar en el emulador (Android 15)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash pulso/tools/emulador.sh
+
+      - name: Guardar las capturas en la rama
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- pulso/dist 2>/dev/null || true
+          git add -f pulso/capturas
+          git commit -q -m "Pulso: capturas del emulador" || exit 0
+          git pull -q --rebase --autostash
+          git push -q
