@@ -81,6 +81,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         buildHandle();
         buildHud();
         buildGeneral();
+        buildDiag();
         TextView foot = Ui.text(this, "Pulso 1.0 · sin internet · los modos nunca activan el ahorro de batería",
                 12f, Ui.TEXT3, Ui.MEDIUM);
         foot.setGravity(Gravity.CENTER);
@@ -258,6 +259,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         sizeSlider.setValue((Prefs.size(this) - 70f) / 150f);
         alphaSlider.setValue(Prefs.alpha(this));
         updateSliderLabels();
+        diagText.setText(Diag.summary(this));
         tapSw.setChecked(Prefs.tap(this), false);
         hudSw.setChecked(Prefs.hud(this), false);
         awakeSw.setChecked(Prefs.awake(this), false);
@@ -544,6 +546,28 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         });
         View r2 = switchRow("Iniciar al encender", "Si estaba activo, vuelve solo tras reiniciar", bootSw);
         card.addView(r2, Ui.lp(Ui.MATCH, Ui.WRAP, 0, Ui.dp(14), 0, 0));
+        content.addView(card, cardLp());
+    }
+
+    private TextView diagText;
+
+    private void buildDiag() {
+        LinearLayout card = card("Cierres de la app");
+        diagText = Ui.text(this, "", 13f, Ui.TEXT2, Ui.REGULAR);
+        diagText.setLineSpacing(Ui.dpf(2), 1f);
+        card.addView(diagText);
+        TextView copy = Ui.text(this, "Copiar informe", 14f, Ui.TEXT, Ui.SEMIBOLD);
+        copy.setGravity(Gravity.CENTER);
+        copy.setBackground(Ui.ripple(Ui.rect(0x1AFFFFFF, 14, 0x24FFFFFF), 14, 0x33FFFFFF));
+        copy.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+                if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("Informe de Pulso", Diag.report(MainActivity.this)));
+                Sys.toast(MainActivity.this, "Informe copiado: pégaselo a Claude");
+            }
+        });
+        card.addView(copy, Ui.lp(Ui.MATCH, Ui.dp(42), 0, Ui.dp(12), 0, 0));
         content.addView(card, cardLp());
     }
 

@@ -62,7 +62,9 @@ public class PulsoService extends Service
     public void onCreate() {
         super.onCreate();
         createChannel();
-        startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        // Si Android reinicia el servicio tras cerrarlo (p. ej. por falta de memoria), puede no dejar
+        // pasar a primer plano hasta que haya una ventana visible: entonces se pone antes el tirador.
+        boolean foreground = goForeground();
         if (!Settings.canDrawOverlays(this)) {
             stopSelf();
             return;
@@ -103,6 +105,24 @@ public class PulsoService extends Service
         wctx.registerComponentCallbacks(callbacks);
         ModeController.apply(this, m);
         requestTileUpdate();
+        if (!foreground) {
+            Sys.MAIN.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (started && !goForeground()) stopSelf();
+                }
+            }, 500);
+        }
+    }
+
+    private boolean goForeground() {
+        try {
+            startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            return true;
+        } catch (RuntimeException e) {
+            android.util.Log.w("Pulso", "startForeground", e);
+            return false;
+        }
     }
 
     @Override
