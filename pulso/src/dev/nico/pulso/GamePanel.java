@@ -556,9 +556,8 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
     private void applyAccent(boolean animate) {
         root.setAccent(mode.c1, mode.c2, animate);
-        ToggleTile[] all = {gHud, gDnd, gBright, gAwake, gRam};
+        ToggleTile[] all = {gHud, gDnd, gBright, gAwake, gNight, gRam};
         for (ToggleTile t : all) t.setAccent(mode.c1, mode.c2);
-        gNight.setAccent(0xFFFFB25B, 0xFFFF7A3D); // siempre en naranja, como la luz nocturna
         if (pkg == null) appIcon.setImageDrawable(badge(ctx));
     }
 
