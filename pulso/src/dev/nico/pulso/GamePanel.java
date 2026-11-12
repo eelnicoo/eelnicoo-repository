@@ -584,23 +584,21 @@ final class GamePanel implements StatsEngine.Listener, Shizuku.Listener {
 
     /** Copia al portapapeles lo que devuelve SurfaceFlinger para el juego abierto, para depurar los FPS. */
     private void copyDiagnostic() {
-        final String p = pkg;
-        if (!Shizuku.ready() || p == null || !Sys.PACKAGE_NAME.matcher(p).matches()) {
-            Sys.toast(ctx, "Abre el panel dentro de un juego, con Shizuku conectado");
+        if (!Shizuku.ready()) {
+            Sys.toast(ctx, "El diagnóstico necesita Shizuku");
             return;
         }
         Sys.toast(ctx, "Preparando el diagnóstico…");
+        final String p = pkg;
         Sys.BG.execute(new Runnable() {
             @Override
             public void run() {
-                String list = Shell.run("dumpsys SurfaceFlinger --list | grep -F '" + p + "'", 5000);
-                String layer = list != null ? StatsEngine.pickLayer(list, p) : null;
-                String out = Shell.run("echo \"Pulso 1.0.4 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)\"; "
-                        + "echo '== capas'; dumpsys SurfaceFlinger --list | grep -F '" + p + "'; "
-                        + "echo '== latency'; " + (layer != null ? "dumpsys SurfaceFlinger --latency '" + layer + "' | head -n 6" : "echo sin capa") + "; "
+                String out = Shell.run("echo \"Pulso 1.0.5 · $(getprop ro.product.model) · Android $(getprop ro.build.version.release)"
+                        + " · juego: " + (p != null ? p : "?") + "\"; "
                         + "echo '== timestats'; dumpsys SurfaceFlinger --timestats -enable >/dev/null; sleep 1; "
-                        + "dumpsys SurfaceFlinger --timestats -dump | grep -B2 -A14 -F '" + p + "' | head -n 60; "
-                        + "echo '== gpu'; " + StatsEngine.GPU_PROBE + "; ls -d /sys/devices/platform/*gpu* /sys/class/devfreq/* 2>/dev/null | head -n 20", 15000);
+                        + "dumpsys SurfaceFlinger --timestats -dump | grep -E 'layerName|totalFrames|averageFPS|renderRate' | head -n 40; "
+                        + "echo '== gpu'; " + StatsEngine.GPU_PROBE + "; "
+                        + "for d in /sys/class/devfreq/*gpu*; do ls \"$d\"; cat \"$d/cur_freq\" \"$d/available_frequencies\" 2>/dev/null; done", 15000);
                 final String text = out != null ? out : "Shizuku no respondió";
                 main.post(new Runnable() {
                     @Override

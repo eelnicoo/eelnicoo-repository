@@ -38,12 +38,20 @@ final class StatsEngine {
 
     static final int HISTORY = 60;
     /** Busca el fichero de uso de la GPU (Adreno, Mali, PowerVR…) e imprime «ruta|valor» de los que se pueden leer. */
+    /**
+     * Busca cómo leer la GPU. Imprime «ruta|valor» de los ficheros de uso que se pueden leer
+     * (Adreno, Mali…) y «freq|carpeta|frecuencias» de las GPU con devfreq (PowerVR del Tensor G5,
+     * que no publica su uso: se usa su frecuencia respecto a la máxima).
+     */
     static final String GPU_PROBE = "for f in /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage /sys/class/kgsl/kgsl-3d0/gpubusy"
             + " /sys/class/misc/mali0/device/utilization /sys/kernel/gpu/gpu_busy /sys/devices/platform/*mali*/utilization"
             + " /sys/devices/platform/*gpu*/utilization /sys/devices/platform/*gpu*/utilisation /sys/devices/platform/*gpu*/gpu_utilization"
+            + " /sys/class/devfreq/*gpu*/load /sys/class/devfreq/*gpu*/gpu_load"
             + " $(find /sys/devices/platform /sys/kernel/gpu -maxdepth 4 \\( -name '*utili[sz]ation*' -o -name 'gpu_busy*'"
             + " -o -name 'gpubusy' -o -name '*gpu_load*' \\) 2>/dev/null | head -n 30); do"
-            + " [ -r \"$f\" ] && v=$(head -c 64 \"$f\" 2>/dev/null | head -n 1) && [ -n \"$v\" ] && echo \"$f|$v\"; done";
+            + " [ -r \"$f\" ] && v=$(head -c 64 \"$f\" 2>/dev/null | head -n 1) && [ -n \"$v\" ] && echo \"$f|$v\"; done;"
+            + " for d in /sys/class/devfreq/*gpu* /sys/class/devfreq/*kgsl* /sys/class/devfreq/*mali* /sys/class/devfreq/*g3d*; do"
+            + " [ -r \"$d/cur_freq\" ] && echo \"freq|$d|$(cat \"$d/max_freq\" 2>/dev/null) $(cat \"$d/available_frequencies\" 2>/dev/null)\"; done";
     private static final Pattern SAFE_PATH = Pattern.compile("[A-Za-z0-9_./:@,+-]+");
     private static final Pattern TEMP = Pattern.compile("Temperature\\{mValue=([-0-9.Ee]+), mType=(-?\\d+), mName=([^,}]*)");
 
@@ -56,12 +64,12 @@ final class StatsEngine {
     private Stats last;
 
     // Estado del muestreo: solo se toca en el hilo de fondo.
-    private String fpsLayer, fpsPkg;
-    private int latencyMisses;
-    private boolean useTimestats, timestatsOn;
-    private String gpuPath;
+    private String fpsPkg;
+    private boolean timestatsOn;
+    private long timestatsAt;
+    private String gpuPath, gpuFreqDir;
+    private long gpuMaxFreq;
     private boolean gpuSearched;
-    private long lastPresent = -1;
     private long lastTotal = -1, lastIdle;
     private int tick;
     private float headroom = Float.NaN, cpuT = Float.NaN, gpuT = Float.NaN, skinT = Float.NaN;
@@ -122,10 +130,9 @@ final class StatsEngine {
     private final Runnable resetCounters = new Runnable() {
         @Override
         public void run() {
-            lastPresent = -1;
             lastTotal = -1;
-            fpsLayer = null;
             fpsPkg = null;
+            timestatsAt = 0;
         }
     };
 
@@ -135,6 +142,7 @@ final class StatsEngine {
         public void run() {
             if (!timestatsOn) return;
             timestatsOn = false;
+            timestatsAt = 0;
             Shell.run("dumpsys SurfaceFlinger --timestats -disable -clear >/dev/null", 3000);
         }
     };
@@ -217,9 +225,8 @@ final class StatsEngine {
         if (s.shizuku) {
             privileged(s, slow);
         } else {
-            lastPresent = -1;
             lastTotal = -1;
-            fpsLayer = null;
+            timestatsAt = 0;
             if (slow) sysfs();
         }
         // Si una lectura de FPS falla, se mantiene la última unos segundos (que no salte a Hz).
@@ -246,73 +253,77 @@ final class StatsEngine {
     }
 
     private void privileged(Stats s, boolean slow) {
-        // Cada 3 s se mira qué juego está delante y, con --latency, cuál es su capa (su SurfaceView).
-        boolean find = tick % 3 == 0;
-        if (find) fpsPkg = Sys.foregroundPackage(app);
-        String pkg = fpsPkg;
-        String layer = fpsLayer;
-        String fpsCmd = "true";
-        if (pkg != null) {
-            if (useTimestats) {
-                fpsCmd = (timestatsOn ? "" : "dumpsys SurfaceFlinger --timestats -enable >/dev/null; ")
-                        + "dumpsys SurfaceFlinger --timestats -dump -clear";
-            } else if (layer != null) {
-                fpsCmd = "dumpsys SurfaceFlinger --latency '" + layer + "'";
-            }
-        }
-        boolean list = find && pkg != null && !useTimestats;
+        // El juego delante (cada 3 s): solo para preferir sus capas al medir los FPS.
+        if (tick % 3 == 0) fpsPkg = Sys.foregroundPackage(app);
+        boolean probe = !gpuSearched;
+        String gpuCmd = "true";
+        if (probe) gpuCmd = GPU_PROBE;
+        else if (gpuPath != null) gpuCmd = "head -c 64 '" + gpuPath + "' | head -n 1";
+        else if (gpuFreqDir != null) gpuCmd = "cat '" + gpuFreqDir + "/cur_freq'";
         StringBuilder cmd = new StringBuilder();
-        cmd.append(list ? "dumpsys SurfaceFlinger --list" : "true");
-        cmd.append("; echo @@; ").append(fpsCmd);
+        // FPS: estadísticas de SurfaceFlinger (frames por capa desde la última lectura).
+        if (!timestatsOn) cmd.append("dumpsys SurfaceFlinger --timestats -enable -clear >/dev/null; ");
+        cmd.append("dumpsys SurfaceFlinger --timestats -dump -clear");
         cmd.append("; echo @@; head -n 1 /proc/stat; echo @@; cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null");
         cmd.append("; echo @@; ").append(slow ? "dumpsys thermalservice 2>/dev/null" : "true");
-        boolean probe = gpuPath == null && !gpuSearched;
-        cmd.append("; echo @@; ").append(probe ? GPU_PROBE : (gpuPath != null ? "head -c 64 '" + gpuPath + "' | head -n 1" : "true"));
+        cmd.append("; echo @@; ").append(gpuCmd);
         String out = Shell.run(cmd.toString(), probe ? 6000 : 3000);
         if (out == null) {
-            lastPresent = -1;
+            timestatsAt = 0;
             return;
         }
         String[] parts = out.split("@@\n", -1);
-        if (pkg != null && useTimestats) {
-            if (timestatsOn && parts.length > 1) s.fps = timestatsFps(parts[1], pkg, s.maxRefresh);
-            timestatsOn = true;
-        } else {
-            if (list) {
-                String picked = pickLayer(parts[0], pkg);
-                if (picked == null || !picked.equals(fpsLayer)) lastPresent = -1;
-                fpsLayer = picked;
-                if (picked == null) latencyMisses++;
-            }
-            if (layer != null && layer.equals(fpsLayer) && parts.length > 1) {
-                if (latency(s, parts[1])) latencyMisses = 0;
-                else latencyMisses++;
-            }
-            // Si --latency no da datos en este móvil, se pasa a las estadísticas de SurfaceFlinger.
-            if (latencyMisses >= 3) useTimestats = true;
+        long now = SystemClock.uptimeMillis();
+        if (timestatsOn && timestatsAt > 0) {
+            float dt = (now - timestatsAt) / 1000f;
+            if (dt > 0.3f) s.fps = timestatsFps(parts[0], fpsPkg, dt, s.maxRefresh);
         }
-        if (parts.length > 2) cpuLoad(s, parts[2]);
-        if (parts.length > 3) cpuFreq(s, parts[3]);
-        if (slow && parts.length > 4) thermal(parts[4]);
-        if (parts.length > 5) {
-            if (probe) {
-                gpuSearched = true;
-                for (String line : parts[5].split("\n")) {
-                    int bar = line.indexOf('|');
-                    if (bar <= 0) continue;
-                    String path = line.substring(0, bar).trim();
-                    if (SAFE_PATH.matcher(path).matches() && Stats.ok(gpuLoad(line.substring(bar + 1)))) {
-                        gpuPath = path;
-                        break;
+        timestatsOn = true;
+        timestatsAt = now;
+        if (parts.length > 1) cpuLoad(s, parts[1]);
+        if (parts.length > 2) cpuFreq(s, parts[2]);
+        if (slow && parts.length > 3) thermal(parts[3]);
+        if (parts.length > 4) gpu(s, parts[4], probe);
+    }
+
+    private void gpu(Stats s, String text, boolean probe) {
+        if (!probe) {
+            if (gpuPath != null) {
+                s.gpuLoad = gpuLoad(text);
+            } else if (gpuFreqDir != null && gpuMaxFreq > 0) {
+                try {
+                    s.gpuLoad = Ui.clamp01(Long.parseLong(text.trim()) / (float) gpuMaxFreq);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return;
+        }
+        gpuSearched = true;
+        for (String line : text.split("\n")) {
+            if (line.startsWith("freq|")) {
+                String[] f = line.split("\\|", 3);
+                if (f.length < 3 || gpuFreqDir != null || !SAFE_PATH.matcher(f[1]).matches()) continue;
+                long max = 0;
+                for (String n : f[2].trim().split("\\s+")) {
+                    try {
+                        max = Math.max(max, Long.parseLong(n));
+                    } catch (NumberFormatException ignored) {
                     }
                 }
-            } else if (gpuPath != null) {
-                s.gpuLoad = gpuLoad(parts[5]);
+                if (max > 0) {
+                    gpuFreqDir = f[1];
+                    gpuMaxFreq = max;
+                }
+                continue;
             }
+            int bar = line.indexOf('|');
+            if (bar <= 0 || gpuPath != null) continue;
+            String path = line.substring(0, bar).trim();
+            if (SAFE_PATH.matcher(path).matches() && Stats.ok(gpuLoad(line.substring(bar + 1)))) gpuPath = path;
         }
     }
 
-    /** Uso de la GPU (0..1) a partir de «45», «45 %» o «ocupado total» (gpubusy de Adreno). */
+    /** Uso de la GPU (0..1) a partir de «45», «45 %», «45@850000000Hz» o «ocupado total» (gpubusy de Adreno). */
     static float gpuLoad(String raw) {
         String v = raw.trim();
         if (v.isEmpty()) return Float.NaN;
@@ -320,7 +331,7 @@ final class StatsEngine {
         try {
             if (f.length >= 2 && f[0].matches("\\d+") && f[1].matches("\\d+")) {
                 long busy = Long.parseLong(f[0]), total = Long.parseLong(f[1]);
-                return total > 0 ? Ui.clamp01(busy / (float) total) : 0f;
+                return total > 0 ? Math.max(0f, Math.min(1f, busy / (float) total)) : 0f;
             }
             Matcher m = NUMBER.matcher(v);
             if (!m.find()) return Float.NaN;
@@ -333,24 +344,45 @@ final class StatsEngine {
 
     private static final Pattern NUMBER = Pattern.compile("\\d+(\\.\\d+)?");
 
-    /** FPS medios del último segundo de la capa del juego, según «dumpsys SurfaceFlinger --timestats». */
-    static float timestatsFps(String text, String pkg, float maxRefresh) {
+    /** Capas del sistema y de Pulso, que no cuentan como «el juego». */
+    private static final String[] NOT_GAME = {"StatusBar", "NavigationBar", "NotificationShade", "ScreenDecor",
+            "RoundCorner", "Wallpaper", "wallpaper", "InputMethod", "Splash Screen", "Pulso:", "dev.nico.pulso",
+            "com.android.systemui", "Sprite", "PointerLocation", "Taskbar", "pip-", "ShellDropTarget"};
+
+    /**
+     * FPS de «dumpsys SurfaceFlinger --timestats -dump -clear»: frames de cada capa desde la última
+     * lectura entre los segundos pasados. Se elige la capa del juego si se sabe cuál es y, si no,
+     * la que más frames ha dibujado (la app que se mueve en pantalla). 0 = nada se mueve.
+     */
+    static float timestatsFps(String text, String pkg, float seconds, float maxRefresh) {
+        java.util.HashMap<String, Long> frames = new java.util.HashMap<>();
         String[] blocks = text.split("layerName = ");
-        float best = 0f;
-        long bestFrames = -1;
         for (int i = 1; i < blocks.length; i++) {
             String b = blocks[i];
             int nl = b.indexOf('\n');
-            String name = nl > 0 ? b.substring(0, nl) : b;
-            if (!name.contains(pkg) && !b.contains("packageName = " + pkg)) continue;
-            long frames = (long) field(b, "totalFrames = ");
-            float fps = field(b, "averageFPS = ");
-            if (Float.isNaN(fps) || frames <= bestFrames) continue;
-            bestFrames = frames;
-            best = fps;
+            String name = (nl > 0 ? b.substring(0, nl) : b).trim();
+            boolean skip = false;
+            for (String x : NOT_GAME) {
+                if (name.contains(x)) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip) continue;
+            float n = field(b, "totalFrames = ");
+            if (Float.isNaN(n)) continue;
+            Long prev = frames.get(name);
+            frames.put(name, (prev != null ? prev : 0L) + (long) n);
         }
+        long best = 0, bestPkg = -1;
+        for (java.util.Map.Entry<String, Long> e : frames.entrySet()) {
+            long n = e.getValue();
+            if (n > best) best = n;
+            if (pkg != null && e.getKey().contains(pkg) && n > bestPkg) bestPkg = n;
+        }
+        long chosen = bestPkg >= 0 ? bestPkg : best;
         float cap = maxRefresh > 0 ? maxRefresh : 240f;
-        return Math.min(best, cap);
+        return Math.min(chosen / Math.max(0.3f, seconds), cap);
     }
 
     private static float field(String block, String key) {
@@ -361,71 +393,6 @@ final class StatsEngine {
             return Float.parseFloat(block.substring(i + key.length(), end > 0 ? end : block.length()).trim());
         } catch (NumberFormatException e) {
             return Float.NaN;
-        }
-    }
-
-    /** La capa que dibuja el juego: su SurfaceView (la de BLAST si hay), o si no la de su ventana. */
-    static String pickLayer(String list, String pkg) {
-        String best = null;
-        int bestScore = 0;
-        for (String raw : list.split("\n")) {
-            String l = raw.trim();
-            if (l.isEmpty() || l.indexOf('\'') >= 0 || !l.contains(pkg)) continue;
-            if (l.startsWith("Background for") || l.startsWith("Bounds for")) continue;
-            int score = 1;
-            if (l.startsWith("SurfaceView")) score += 4;
-            if (l.contains("BLAST")) score += 2;
-            if (score > bestScore) {
-                bestScore = score;
-                best = l;
-            }
-        }
-        return best;
-    }
-
-    /** FPS a partir de los últimos 128 tiempos de presentación de la capa (en ns). */
-    /** false si la capa no ha dado ningún tiempo de frame. */
-    private boolean latency(Stats s, String text) {
-        String[] lines = text.split("\n");
-        long[] ts = new long[lines.length];
-        int n = 0;
-        for (int i = 1; i < lines.length; i++) {
-            String[] f = lines[i].trim().split("\\s+");
-            if (f.length < 3) continue;
-            long t = nanos(f[1]);
-            if (t <= 0) t = nanos(f[2]);
-            if (t > 0) ts[n++] = t;
-        }
-        if (n < 2) return false;
-        Arrays.sort(ts, 0, n);
-        long newest = ts[n - 1];
-        if (newest == lastPresent) { // ningún frame nuevo desde la última lectura
-            s.fps = 0f;
-            return true;
-        }
-        lastPresent = newest;
-        long from = newest - 1_000_000_000L;
-        int count = 0;
-        long oldest = newest;
-        for (int i = 0; i < n; i++) {
-            if (ts[i] >= from) {
-                count++;
-                oldest = Math.min(oldest, ts[i]);
-            }
-        }
-        if (count >= 2 && newest > oldest) {
-            float cap = s.maxRefresh > 0 ? s.maxRefresh : 240f;
-            s.fps = Math.min((count - 1) * 1e9f / (newest - oldest), cap);
-        }
-        return true;
-    }
-
-    private static long nanos(String v) {
-        try {
-            long t = Long.parseLong(v);
-            return t == Long.MAX_VALUE ? -1 : t;
-        } catch (NumberFormatException e) {
-            return -1;
         }
     }
 
