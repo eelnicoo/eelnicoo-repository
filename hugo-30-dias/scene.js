@@ -18,12 +18,12 @@ const blinkAt = (t, off = 0) => ((t + off) % 3.3) < 0.12;
 // ---------- guion ----------
 const LINES = [
   { text: 'Este es Hugo.', hl: ['hugo'] },
-  { text: 'Veintiséis años. Repitiendo primero por quinta vez.', hl: ['quinta', 'vez'] },
+  { text: 'Veintiséis años. Cinco de becario.', hl: ['becario'] },
   { text: 'Lleva una semana sin ducharse.', hl: ['sin', 'ducharse'] },
-  { text: 'Y tres años enamorado de Laura.', hl: ['laura'] },
+  { text: 'Y dos años enamorado de Laura.', hl: ['laura'] },
   { text: 'Laura no sabe ni cómo se llama.', hl: ['no', 'sabe'] },
   { text: 'Porque Laura sale con Marcos.', hl: ['marcos'], red: ['marcos'] },
-  { text: 'Fiesta de fin de curso: en treinta días.', hl: ['treinta', 'días'] },
+  { text: 'Cena de empresa: en treinta días.', hl: ['treinta', 'días'] },
   { text: 'Hugo tiene treinta días para cambiar.', hl: ['cambiar'] },
   { text: '¿Por dónde empieza?', hl: ['empieza'] },
   { text: 'Comenta: ducha o gym.', hl: ['ducha', 'gym'] },
@@ -218,17 +218,18 @@ function hugo(o = {}) {
 
 function laura(o = {}) {
   const { mouth = 'smile', look = 0, blink = false, brow = 'normal' } = o;
-  const skin = '#f8d3b4', hair = '#4a2c1f', top = '#ff6f9f', topD = '#e2507f', jeans = '#7fa6d9';
+  const skin = '#f8d3b4', hair = '#4a2c1f', top = '#ff6f9f', topD = '#e2507f', jeans = '#2f3e5c', blazer = '#3d4f7a';
   let s = '';
   s += `<path d="M-188,-860 Q-205,-1065 0,-1065 Q205,-1065 188,-860 L205,-545 Q130,-505 95,-590 L-95,-590 Q-130,-505 -205,-545 Z" fill="${hair}" ${st()}/>`;
   s += `<rect x="-70" y="-400" width="58" height="370" rx="22" fill="${jeans}" ${st()}/>`;
   s += `<rect x="12" y="-400" width="58" height="370" rx="22" fill="${jeans}" ${st()}/>`;
   s += `<path d="M-95,-8 Q-95,-52 -44,-52 Q-8,-52 -8,-8 Z" fill="#ffe3ec" ${st()}/>`;
   s += `<path d="M95,-8 Q95,-52 44,-52 Q8,-52 8,-8 Z" fill="#ffe3ec" ${st()}/>`;
-  s += arm(-112, -640, 7, top, 56, 240, skin);
-  s += arm(112, -640, -7, top, 56, 240, skin);
+  s += arm(-118, -640, 7, blazer, 58, 240, skin);
+  s += arm(118, -640, -7, blazer, 58, 240, skin);
   s += `<path d="M-122,-662 Q-142,-540 -108,-385 L108,-385 Q142,-540 122,-662 Q0,-692 -122,-662 Z" fill="${top}" ${st()}/>`;
-  s += `<path d="M-108,-430 L108,-430" ${st(6)}/><path d="M-60,-560 Q0,-530 60,-560" fill="none" stroke="${topD}" stroke-width="8"/>`;
+  s += `<path d="M-128,-664 Q-148,-540 -112,-385 L-40,-385 L-50,-560 L-20,-664 Z" fill="${blazer}" ${st()}/><path d="M128,-664 Q148,-540 112,-385 L40,-385 L50,-560 L20,-664 Z" fill="${blazer}" ${st()}/>`;
+  s += `<path d="M-20,-664 L-60,-600 L-40,-560 M20,-664 L60,-600 L40,-560" fill="none" ${st(6)}/><circle cx="-80" cy="-470" r="7" fill="#ffd23f"/>`;
   s += `<rect x="-26" y="-715" width="52" height="65" fill="${skin}" ${st()}/>`;
   s += `<circle cx="0" cy="-845" r="162" fill="${skin}" ${st()}/>`;
   s += `<path d="M-168,-878 Q-155,-1012 0,-1012 Q155,-1012 168,-878 Q120,-942 40,-932 Q10,-900 -20,-936 Q-100,-952 -168,-878 Z" fill="${hair}" ${st()}/>`;
@@ -281,27 +282,30 @@ function marcos(o = {}) {
 const place = (svg, x, y, sc = 1, rot = 0) => `<g transform="translate(${x},${y}) rotate(${rot}) scale(${sc})">${svg}</g>`;
 
 // ---------- decorados ----------
-function classroom(t) {
+function classroom(t) { // oficina
   let s = '';
-  s += `<rect x="0" y="0" width="1080" height="1430" fill="#f1dfb8"/>`;
-  for (let x = 0; x < 1080; x += 90) s += `<rect x="${x}" y="0" width="45" height="1430" fill="#ebd5a8" opacity=".6"/>`;
-  s += `<rect x="0" y="1250" width="1080" height="180" fill="#dcc08c"/><path d="M0,1250 H1080" ${st(6)}/>`;
-  s += `<rect x="0" y="1430" width="1080" height="490" fill="#b9794a"/><path d="M0,1430 H1080" ${st(7)}/>`;
-  for (let y = 1500; y < 1920; y += 85) s += `<path d="M0,${y} H1080" stroke="#9c6237" stroke-width="5"/>`;
-  s += `<rect x="110" y="300" width="860" height="470" rx="16" fill="#8a5a32" ${st()}/>`;
-  s += `<rect x="135" y="322" width="810" height="425" rx="8" fill="#2f5d4a"/>`;
-  s += `<text x="190" y="420" font-family="Fredoka" font-size="64" fill="#fff" opacity=".75">MATES</text>`;
-  s += `<text x="190" y="510" font-family="Fredoka" font-size="52" fill="#fff" opacity=".6">x² + 2x = ?</text>`;
-  s += `<path d="M190,560 q60,-30 120,0 t120,0" fill="none" stroke="#fff" stroke-width="5" opacity=".45"/>`;
-  // corazón «H + L» pintado con tiza
-  s += `<g transform="translate(780,600)" opacity=".7"><path d="${HEART}" transform="scale(1.6)" fill="none" stroke="#fff" stroke-width="3"/>
-        <text x="0" y="8" text-anchor="middle" font-family="Fredoka" font-size="34" fill="#fff">H+L</text></g>`;
+  s += `<rect x="0" y="0" width="1080" height="1430" fill="#dfe6ee"/>`;
+  s += `<rect x="0" y="1180" width="1080" height="250" fill="#c9d3de"/><path d="M0,1180 H1080" ${st(6)}/>`;
+  s += `<rect x="0" y="1430" width="1080" height="490" fill="#7d889b"/><path d="M0,1430 H1080" ${st(7)}/>`;
+  for (let i = 0; i < 60; i++) s += `<rect x="${(i * 173) % 1080}" y="${1450 + (i * 97) % 460}" width="18" height="6" fill="#6f7a8d"/>`;
+  // ventanal con la ciudad
+  s += `<rect x="90" y="290" width="560" height="500" rx="10" fill="#9fd3f5" ${st()}/>`;
+  const b = [[110, 560, 90], [210, 470, 70], [290, 600, 110], [410, 520, 80], [500, 430, 120]];
+  for (const [x, y, w] of b) { s += `<rect x="${x}" y="${y}" width="${w}" height="${790 - y}" fill="#6c8db5"/>`; for (let yy = y + 20; yy < 770; yy += 40) for (let xx = x + 12; xx < x + w - 12; xx += 26) s += `<rect x="${xx}" y="${yy}" width="12" height="18" fill="#cfe8ff" opacity=".8"/>`; }
+  s += `<path d="M370,290 V790 M90,540 H650" ${st(10)}/><rect x="90" y="290" width="560" height="500" rx="10" fill="none" ${st()}/>`;
+  // pizarra blanca con gráfica y el corazón escondido
+  s += `<rect x="690" y="330" width="320" height="300" rx="12" fill="#fff" ${st()}/>`;
+  s += `<path d="M720,590 L780,540 L830,560 L890,470 L960,420" fill="none" stroke="#2f9e44" stroke-width="8" stroke-linecap="round"/>`;
+  s += `<text x="720" y="390" font-family="Fredoka" font-size="38" fill="#1c7ed6">VENTAS</text>`;
+  s += `<g transform="translate(950,560)" opacity=".8"><path d="${HEART}" transform="scale(.9)" fill="none" stroke="#e03131" stroke-width="5"/><text x="0" y="6" text-anchor="middle" font-family="Fredoka" font-size="20" fill="#e03131">H+L</text></g>`;
+  // planta y reloj
+  s += `<rect x="925" y="1000" width="90" height="120" rx="10" fill="#e8590c" ${st()}/><path d="M970,1000 q-60,-90 -20,-160 M970,1000 q10,-110 50,-150 M970,1000 q-10,-70 -70,-90" fill="none" stroke="#2f9e44" stroke-width="16" stroke-linecap="round"/>`;
   s += `<circle cx="960" cy="200" r="58" fill="#fff" ${st()}/><path d="M960,200 L960,160 M960,200 L${960 + 30 * Math.cos(t)},${200 + 30 * Math.sin(t)}" ${st(6)}/>`;
   return s;
 }
 function desk(x, y, w = 380) {
-  return `<g transform="translate(${x},${y})"><rect x="${-w / 2 + 25}" y="30" width="${w - 50}" height="200" fill="#a86d38" ${st()}/>
-    <rect x="${-w / 2}" y="0" width="${w}" height="44" rx="12" fill="#cf9157" ${st()}/></g>`;
+  return `<g transform="translate(${x},${y})"><rect x="${-w / 2 + 25}" y="30" width="${w - 50}" height="200" fill="#9aa6b8" ${st()}/>
+    <rect x="${-w / 2}" y="0" width="${w}" height="44" rx="12" fill="#e9edf2" ${st()}/></g>`;
 }
 function burst(cx, cy, t, c1, c2) {
   let s = `<rect width="1080" height="1920" fill="${c1}"/>`;
@@ -378,11 +382,14 @@ const SCENES = {
     s += place(hugo({ t, mood: 'normal', mouth: 'smile', look: -0.5, blink: blinkAt(t, 0.9) }), 540, 2240 + Math.sin(t * 3) * 5, 1.6);
     s += desk(540, 1640, 820);
     const k = back(seg(lt, 0.1, 0.4));
-    s += `<g transform="translate(540,450) rotate(5) scale(${k})">
-      <rect x="-260" y="-150" width="520" height="300" rx="20" fill="#fff" ${st(9)}/>
-      <text x="0" y="-70" text-anchor="middle" font-family="Fredoka" font-size="44" fill="${OUT}">1º DE CARRERA</text>
-      ${[0, 1, 2, 3, 4].map(i => `<text x="${-180 + i * 90}" y="40" text-anchor="middle" font-family="Lilita" font-size="70" fill="#e03131" opacity="${seg(lt, 0.4 + i * 0.12, 0.5 + i * 0.12)}">${['3', '2', '4', '1', '0'][i]}</text>`).join('')}
-      <text x="0" y="115" text-anchor="middle" font-family="Fredoka" font-size="38" fill="#e03131">INTENTO Nº 5</text></g>`;
+    s += `<g transform="translate(540,520) rotate(5) scale(${k})">
+      <path d="M-60,-150 L-20,-300 M60,-150 L20,-300" stroke="#1c7ed6" stroke-width="16"/>
+      <rect x="-250" y="-150" width="500" height="300" rx="24" fill="#fff" ${st(9)}/>
+      <rect x="-250" y="-150" width="500" height="70" rx="24" fill="#1c7ed6"/><rect x="-250" y="-100" width="500" height="20" fill="#1c7ed6"/>
+      <text x="0" y="-100" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff">OFICINAS S.L.</text>
+      <rect x="-220" y="-55" width="130" height="160" rx="12" fill="#ffe0b8" ${st(5)}/><circle cx="-155" cy="0" r="38" fill="#a8552a"/><circle cx="-155" cy="10" r="30" fill="#efbd95"/>
+      <text x="80" y="20" text-anchor="middle" font-family="Lilita" font-size="64" fill="#e03131">BECARIO</text>
+      <text x="80" y="90" text-anchor="middle" font-family="Fredoka" font-size="38" fill="${OUT}" opacity="${seg(lt, 0.6, 0.9)}">DESDE 2021</text></g>`;
     return s;
   },
   // «Lleva una semana sin ducharse.»
@@ -437,20 +444,21 @@ const SCENES = {
   },
   // «Fiesta de fin de curso: en treinta días.»
   E(lt, t) {
-    let s = `<rect width="1080" height="1920" fill="#f1dfb8"/>`;
+    let s = `<rect width="1080" height="1920" fill="#dfe6ee"/>`;
     s += `<rect x="70" y="250" width="940" height="900" rx="20" fill="#c8935a" ${st()}/>`;
     for (let i = 0; i < 40; i++) s += `<circle cx="${100 + (i * 197) % 880}" cy="${280 + (i * 131) % 840}" r="4" fill="#a87440"/>`;
     const sw = Math.sin(t * 2) * 1.5;
     s += `<g transform="translate(540,690) rotate(${-4 + sw})">
-      <rect x="-330" y="-400" width="660" height="790" rx="14" fill="#2b1650" ${st(9)}/>
+      <rect x="-330" y="-400" width="660" height="790" rx="14" fill="#7a1022" ${st(9)}/>
       <circle cx="0" cy="-400" r="16" fill="#ff4d5e" ${st(6)}/>
-      <g transform="translate(0,-195) rotate(${t * 40})"><circle r="95" fill="#c9d3e6" ${st(7)}/>
-        <path d="M-95,0 H95 M0,-95 V95 M-80,-50 H80 M-80,50 H80 M-50,-80 V80 M50,-80 V80" stroke="#8d9ab3" stroke-width="5"/></g>
-      ${[0, 1, 2, 3, 4, 5].map(i => { const a = i * 1.05 + t * 1.5; return `<path d="M0,-195 L${Math.cos(a) * 330},${-195 + Math.sin(a) * 330}" stroke="${['#ff4d6d', '#ffd23f', '#46d17f'][i % 3]}" stroke-width="10" opacity=".35"/>`; }).join('')}
-      <text x="0" y="40" text-anchor="middle" font-family="Lilita" font-size="150" fill="#ffd23f" ${st(10)} paint-order="stroke">FIESTA</text>
-      <text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="80" fill="#fff">FIN DE CURSO</text>
-      <text x="0" y="215" text-anchor="middle" font-family="Fredoka" font-size="42" fill="#ff8ab0">VIERNES · 22:00 · GIMNASIO</text>
-      <text x="0" y="300" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff" opacity=".7">¡VEN CON PAREJA!</text></g>`;
+      <g transform="translate(0,-190)">
+        <path d="M0,-150 L110,40 L-110,40 Z M0,-90 L130,110 L-130,110 Z" fill="#2f9e44" ${st(7)}/><rect x="-22" y="110" width="44" height="40" fill="#8a5a32" ${st(6)}/>
+        <path d="M0,-185 l14,30 l32,4 l-24,22 l7,32 l-29,-16 l-29,16 l7,-32 l-24,-22 l32,-4 Z" fill="#ffd23f" ${st(5)}/>
+        ${[[-40, -30, '#ff4d6d'], [45, 10, '#4dabf7'], [-60, 80, '#ffd23f'], [55, 80, '#ff4d6d'], [0, 40, '#fff']].map(([x, y, c], i) => `<circle cx="${x}" cy="${y}" r="15" fill="${c}" opacity="${0.6 + 0.4 * Math.sin(t * 6 + i)}" ${st(4)}/>`).join('')}</g>
+      <text x="0" y="40" text-anchor="middle" font-family="Lilita" font-size="120" fill="#ffd23f" ${st(10)} paint-order="stroke">CENA DE</text>
+      <text x="0" y="140" text-anchor="middle" font-family="Lilita" font-size="110" fill="#fff">EMPRESA</text>
+      <text x="0" y="220" text-anchor="middle" font-family="Fredoka" font-size="42" fill="#ff8ab0">NAVIDAD · VIERNES · 21:00</text>
+      <text x="0" y="300" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff" opacity=".7">¡TRAED PAREJA!</text></g>`;
     const ws = wordTime(6, 'treinta') - TL.lines[6].start;
     const k = seg(lt, ws, ws + 0.22);
     if (k > 0) {
