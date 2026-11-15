@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Hugo 30 días</title>
+<style>
+@font-face { font-family: Lilita; src: url(fonts/LilitaOne.ttf); }
+@font-face { font-family: Fredoka; src: url(fonts/Fredoka-SemiBold.ttf); }
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #1d1630; }
+svg { position: absolute; inset: 0; }
+#cap {
+  position: absolute; left: 30px; right: 30px; top: 1170px;
+  text-align: center; font-family: Lilita; font-size: 108px; line-height: 1.08;
+  color: #fff; text-transform: uppercase;
+}
+#cap span {
+  display: inline-block; margin: 0 14px;
+  -webkit-text-stroke: 18px #1d1630; paint-order: stroke fill;
+  text-shadow: 0 10px 0 rgba(0,0,0,.35);
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="s" viewBox="0 0 1080 1920" width="1080" height="1920" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="cap"></div>
+</div>
+<script src="scene.js"></script>
+</body>
+</html>
