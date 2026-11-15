@@ -18,6 +18,7 @@ const blinkAt = (t, off = 0) => ((t + off) % 3.3) < 0.12;
 // ---------- guion ----------
 const LINES = [
   { text: 'Este es Hugo.', hl: ['hugo'] },
+  { text: 'Veintiséis años. Repitiendo primero por quinta vez.', hl: ['quinta', 'vez'] },
   { text: 'Lleva una semana sin ducharse.', hl: ['sin', 'ducharse'] },
   { text: 'Y tres años enamorado de Laura.', hl: ['laura'] },
   { text: 'Laura no sabe ni cómo se llama.', hl: ['no', 'sabe'] },
@@ -93,29 +94,34 @@ function eyes(cx, cy, o) {
 }
 
 function hugo(o = {}) {
-  // g: glow-up de 0 (gordo y guarro) a 1 (transformado). w: ancho del cuerpo. d: suciedad.
-  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = GLOW, t = 0, grime = true } = o;
+  // g: glow-up de 0 (día 0) a 1 (transformado). w: ancho del cuerpo. d: dejadez. fat: gordura.
+  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = GLOW, t = 0, grime = true, look = 0, lookY = 0, blink = false } = o;
   const w = lerp(1.55, 1, g), d = clamp(1 - g * 2.2), fat = clamp(1 - g * 2);
-  const skin = '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a';
-  const hair = d > 0.5 ? '#9a4a22' : '#d0662e';
+  const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a';
+  const hair = '#a8552a', beardC = '#6b3f22';
   const lw = lerp(66, 88, fat), lx = lerp(12, 22, fat);
-  const fw = lerp(1, 1.1, fat); // cara más ancha
   let s = '';
-  // tufo (detrás del cuerpo)
+  // tufo
   if (grime && d > 0) for (let i = 0; i < 4; i++) {
     const k = ((t * 0.55 + i / 4) % 1), x = (i - 1.5) * 110 * w;
     s += `<path d="M${x},${-600 - k * 520} q30,-40 0,-80 t0,-80 t0,-80" fill="none" stroke="#8cc63f" stroke-width="16" stroke-linecap="round" opacity="${Math.sin(k * Math.PI) * 0.75 * d}"/>`;
   }
   s += `<rect x="${-lx - lw}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
   s += `<rect x="${lx}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
-  const so = (lx + lw / 2) - 45;
-  s += `<path d="M${-105 - so},-8 Q${-105 - so},-58 ${-48 - so},-58 Q${-6 - so},-58 ${-6 - so},-8 Z" fill="${d > 0.5 ? '#d9d2b8' : '#fff'}" ${st()}/>`;
-  s += `<path d="M${105 + so},-8 Q${105 + so},-58 ${48 + so},-58 Q${6 + so},-58 ${6 + so},-8 Z" fill="${d > 0.5 ? '#d9d2b8' : '#fff'}" ${st()}/>`;
+  const so = (lx + lw / 2) - 45, shoe = d > 0.5 ? '#d9d2b8' : '#fff';
+  s += `<path d="M${-105 - so},-8 Q${-105 - so},-58 ${-48 - so},-58 Q${-6 - so},-58 ${-6 - so},-8 Z" fill="${shoe}" ${st()}/>`;
+  s += `<path d="M${105 + so},-8 Q${105 + so},-58 ${48 + so},-58 Q${6 + so},-58 ${6 + so},-8 Z" fill="${shoe}" ${st()}/>`;
   const shx = 128 * lerp(1, 1.32, fat), aw = lerp(64, 84, fat);
   s += arm(-shx, -640, armL + 6 * fat, hood, aw, 250, skin);
   s += arm(shx, -640, armR - 6 * fat, hood, aw, 250, skin, fistR);
-  // barriga asomando por debajo de la sudadera
-  if (fat > 0.2) s += `<ellipse cx="0" cy="-392" rx="${125 * w}" ry="${62 * fat}" fill="${skin}" ${st()}/><path d="M-8,-380 q8,10 16,0" fill="none" ${st(5)}/>`;
+  // barriga con pelos
+  if (fat > 0.2) {
+    s += `<ellipse cx="0" cy="-392" rx="${125 * w}" ry="${62 * fat}" fill="${skin}" ${st()}/>`;
+    let hairs = '';
+    for (let i = 0; i < 16; i++) { const x = ((i * 53) % 220) - 110, y = -425 + ((i * 37) % 60); hairs += `M${x},${y} q5,-9 10,-2 `; }
+    s += `<path d="${hairs} M0,-440 q-6,20 0,40" fill="none" stroke="#5b3a26" stroke-width="3.5" stroke-linecap="round" opacity="${fat}"/>`;
+    s += `<path d="M-8,-378 q8,10 16,0" fill="none" ${st(5)}/>`;
+  }
   const hy = lerp(-380, -425, fat);
   s += `<path d="M${-138 * w},-662 Q${-185 * w},-540 ${-128 * w},${hy} L${128 * w},${hy} Q${185 * w},-540 ${138 * w},-662 Q0,-700 ${-138 * w},-662 Z" fill="${hood}" ${st()}/>`;
   s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
@@ -123,43 +129,87 @@ function hugo(o = {}) {
   s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
   if (d > 0) s += `<g opacity="${d}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
       <path d="M${55 * w},-520 q24,-16 40,4 q8,26 -18,28 q-30,0 -22,-32 Z" fill="#c0392b"/>
-      <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/>
-      <circle cx="${-20}" cy="-640" r="6" fill="#e8b923"/><circle cx="${18}" cy="-625" r="5" fill="#e8b923"/></g>`;
-  s += `<rect x="-30" y="-725" width="60" height="75" fill="${skin}" ${st()}/>`;
+      <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/></g>`;
+  s += `<rect x="-34" y="-725" width="68" height="75" fill="${skin}" ${st()}/>`;
   s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
-  s += `<circle cx="${-168 * fw}" cy="-835" r="40" fill="${skin}" ${st()}/><circle cx="${168 * fw}" cy="-835" r="40" fill="${skin}" ${st()}/>`;
-  s += `<ellipse cx="0" cy="-850" rx="${172 * fw}" ry="172" fill="${skin}" ${st()}/>`;
-  if (fat > 0.3) s += `<path d="M-95,-700 Q0,-640 95,-700" fill="${skin}" ${st(7)}/>`;
-  if (d > 0.5) {
-    // pelo grasiento y aplastado, con mechones
-    s += `<path d="M${-188 * fw},-830 Q${-205 * fw},-1012 0,-1028 Q${205 * fw},-1012 ${188 * fw},-830 Q170,-930 122,-950 L112,-872 L82,-955 L42,-885 L20,-962 L-20,-880 L-52,-960 L-92,-875 L-112,-955 Q-172,-930 ${-188 * fw},-830 Z" fill="${hair}" ${st()}/>`;
-    s += `<path d="M-90,-1000 q40,-12 80,-6 M30,-1008 q40,-2 70,10" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".45" fill="none"/>`;
-  } else {
-    s += `<path d="M-180,-840 Q-192,-1000 -62,-1032 L-42,-1080 L-2,-1038 L42,-1086 L72,-1030 Q192,-1008 180,-850 Q150,-950 62,-958 Q22,-928 -8,-960 Q-62,-930 -122,-952 Q-160,-900 -180,-840 Z" fill="${hair}" ${st()}/>`;
-  }
-  for (const sx of [-1, 1]) {
-    s += `<circle cx="${sx * 98}" cy="-782" r="6" fill="#c97b52"/><circle cx="${sx * 118}" cy="-770" r="5" fill="#c97b52"/><circle cx="${sx * 96}" cy="-760" r="5" fill="#c97b52"/>`;
-  }
-  if (d > 0) {
-    s += `<g opacity="${d * 0.55}" fill="#7a5a3a"><ellipse cx="-115" cy="-930" rx="26" ry="16"/><ellipse cx="120" cy="-770" rx="28" ry="15"/><ellipse cx="55" cy="-965" rx="16" ry="10"/></g>`;
+  // cabeza: forma de pera, más ancha abajo (mofletes) cuanto más gordo
+  const jw = lerp(0.86, 1.08, fat);
+  s += `<circle cx="-186" cy="-842" r="36" fill="${skin}" ${st()}/><circle cx="186" cy="-842" r="36" fill="${skin}" ${st()}/>`;
+  s += `<path d="M-150,-1015 Q0,-1055 150,-1015 Q188,-925 ${196 * jw},-800 Q${206 * jw},-668 0,-660 Q${-206 * jw},-668 ${-196 * jw},-800 Q-188,-925 -150,-1015 Z" fill="${skin}" ${st()}/>`;
+  // papada
+  if (fat > 0.3) s += `<path d="M-125,-688 Q0,-600 125,-688 Q0,-650 -125,-688 Z" fill="${skin}" ${st(7)}/><path d="M-70,-648 Q0,-622 70,-648" fill="none" ${st(5)}/>`;
+  // barba
+  if (d > 0.3) {
+    s += `<g fill="${beardC}" opacity=".92">
+      <path d="M-196,-830 Q-200,-720 -115,-680 Q-150,-740 -158,-805 Z"/>
+      <path d="M196,-840 Q205,-700 80,-668 Q55,-700 118,-716 Q160,-760 152,-840 Z"/>
+      <path d="M-55,-670 Q0,-650 38,-668 Q22,-700 -30,-698 Z"/></g>`;
     let dots = '';
-    for (let i = 0; i < 26; i++) { const a = Math.PI * (0.12 + 0.76 * (i / 25)), r = 118 + (i % 3) * 14; dots += `<circle cx="${Math.cos(a) * r * 0.95}" cy="${-850 + Math.sin(a) * r * 1.05}" r="4"/>`; }
-    s += `<g fill="#5b3a26" opacity="${d * 0.7}">${dots}</g>`;
+    for (let i = 0; i < 40; i++) { const a = Math.PI * (0.05 + 0.9 * ((i * 0.618) % 1)), r = 120 + ((i * 29) % 70); dots += `<circle cx="${Math.cos(a) * r * 1.05}" cy="${-800 + Math.sin(a) * r * 0.75}" r="3.5"/>`; }
+    s += `<g fill="${beardC}" opacity=".75">${dots}</g>`;
+    s += `<path d="M-48,-748 q22,-12 42,-2 M8,-750 q22,-6 40,8" fill="none" stroke="${beardC}" stroke-width="7" stroke-linecap="round"/>`;
+  } else if (g >= 0.5) {
+    s += `<path d="M-192,-830 Q-198,-680 0,-658 Q198,-680 192,-830 Q172,-725 100,-712 Q40,-738 0,-730 Q-40,-738 -100,-712 Q-172,-725 -192,-830 Z" fill="${beardC}"/>`;
+    s += `<path d="M-50,-750 Q0,-772 50,-750 Q0,-760 -50,-750 Z" fill="${beardC}" ${st(4)}/>`;
   }
-  if (mood === 'dream') s += `<ellipse cx="-105" cy="-768" rx="34" ry="18" fill="#ff7a8a" opacity=".55"/><ellipse cx="105" cy="-768" rx="34" ry="18" fill="#ff7a8a" opacity=".55"/>`;
-  s += eyes(0, -850, o);
-  if (d > 0.5 && mood !== 'determined' && mood !== 'sad') s += `<path d="M-32,-906 Q0,-920 32,-906" fill="none" ${st(11)}/>`;
-  s += `<path d="M-4,-800 Q12,-788 -2,-774" fill="none" ${st(6)}/>`;
-  if (mouth === 'smile') s += `<path d="M-46,-738 Q0,-700 46,-738" fill="none" ${st(8)}/>`;
-  if (mouth === 'open') s += `<path d="M-52,-745 Q0,-680 52,-745 Z" fill="#7a1f2e" ${st(7)}/>`;
-  if (mouth === 'o') s += `<ellipse cx="0" cy="-728" rx="20" ry="26" fill="#7a1f2e" ${st(6)}/>`;
-  if (mouth === 'sad') s += `<path d="M-40,-718 Q0,-752 40,-718" fill="none" ${st(8)}/>`;
-  if (mouth === 'grit') s += `<rect x="-54" y="-756" width="108" height="40" rx="12" fill="#fff" ${st(7)}/><path d="M-54,-736 H54 M-18,-756 V-716 M18,-756 V-716" ${st(4)}/>`;
-  if (mouth === 'chew') s += (Math.sin(t * 22) > 0 ? `<path d="M-46,-742 Q0,-700 46,-742 Z" fill="#7a1f2e" ${st(7)}/>` : `<path d="M-40,-735 Q0,-722 40,-735" fill="none" ${st(8)}/>`) + `<circle cx="-50" cy="-715" r="6" fill="#e8b923"/><circle cx="42" cy="-708" r="5" fill="#e8b923"/>`;
+  // granos
+  if (d > 0) for (const [x, y, r] of [[-125, -905, 10], [118, -935, 9], [-62, -985, 8], [145, -790, 10], [-160, -775, 9], [35, -1002, 7], [80, -890, 7]])
+    s += `<g opacity="${d}"><circle cx="${x}" cy="${y}" r="${r}" fill="#e0493e"/><circle cx="${x - 2}" cy="${y - 2}" r="${r * 0.35}" fill="#fff6d8"/></g>`;
+  // pelo
+  if (d > 0.5) {
+    s += `<path d="M-205,-845 Q-222,-1068 0,-1082 Q222,-1068 205,-845 L192,-885 L172,-900 L150,-935 L128,-912 L100,-952 L66,-922 L36,-958 L2,-928 L-34,-962 L-66,-926 L-104,-958 L-128,-920 L-160,-940 L-176,-895 L-196,-878 Z" fill="${hair}" ${st()}/>`;
+    s += `<path d="M-10,-1076 Q-46,-1140 4,-1170 Q-14,-1128 22,-1080 Z" fill="${hair}" ${st(6)}/>`;
+    s += `<path d="M-120,-1030 q50,-22 100,-14 M40,-1050 q50,-4 90,16" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".4" fill="none"/>`;
+  } else {
+    s += `<path d="M-188,-880 Q-205,-1045 -40,-1072 Q62,-1118 165,-1052 Q205,-990 188,-880 Q162,-962 90,-978 Q0,-994 -92,-972 Q-162,-962 -188,-880 Z" fill="${hair}" ${st()}/>`;
+  }
+  // ojos (pequeños, de adulto) con ojeras
+  for (const sx of [-1, 1]) {
+    const x = sx * 68, y = -850;
+    if (d > 0) s += `<path d="M${x - 28},${y + 30} q28,16 56,0" fill="none" stroke="#b07a5a" stroke-width="5" stroke-linecap="round" opacity="${d}"/>`;
+    if (blink) { s += `<path d="M${x - 26},${y} Q${x},${y + 12} ${x + 26},${y}" fill="none" ${st(6)}/>`; continue; }
+    const ry = mood === 'determined' ? 18 : lerp(30, 24, d);
+    s += `<ellipse cx="${x}" cy="${y}" rx="${lerp(30, 25, d)}" ry="${ry}" fill="#fff" ${st(6)}/>`;
+    if (mood === 'dream') s += heart(x + look * 4, y + 3, 0.34, '#ff3b5c');
+    else {
+      const px = x + look * 10, py = y + 4 + lookY * 8;
+      s += `<circle cx="${px}" cy="${py}" r="${mood === 'determined' ? 10 : 12}" fill="${OUT}"/><circle cx="${px + 4}" cy="${py - 4}" r="4" fill="#fff"/>`;
+    }
+  }
+  const by = -912;
+  if (mood === 'determined') s += `<path d="M-120,${by - 16} L-28,${by + 18} M120,${by - 16} L28,${by + 18}" ${st(18)}/>`;
+  else if (mood === 'sad') s += `<path d="M-115,${by + 12} L-34,${by - 12} M115,${by + 12} L34,${by - 12}" ${st(14)}/>`;
+  else s += `<path d="M-112,${by + 4} Q-70,${by - 18} -26,${by} M112,${by + 4} Q70,${by - 18} 26,${by}${d > 0.5 ? ` M-30,${by} Q0,${by - 10} 30,${by}` : ''}" fill="none" ${st(d > 0.5 ? 15 : 11)}/>`;
+  // gafas torcidas
+  if (d > 0.5) s += `<g transform="rotate(-4,0,-850)">
+      <path d="M-120,-860 L-186,-875 M120,-860 L186,-875" ${st(9)}/>
+      <circle cx="-68" cy="-850" r="54" fill="#dff3ff" fill-opacity=".22" stroke="#4a2e1c" stroke-width="14"/>
+      <circle cx="68" cy="-850" r="54" fill="#dff3ff" fill-opacity=".22" stroke="#4a2e1c" stroke-width="14"/>
+      <path d="M-16,-856 Q0,-870 16,-856" fill="none" stroke="#4a2e1c" stroke-width="12"/>
+      <path d="M-98,-872 l22,-16 M38,-872 l22,-16" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".7"/></g>`;
+  // nariz
+  s += `<path d="M-14,-815 Q-34,-772 -2,-766 Q32,-768 16,-815" fill="${d > 0.5 ? '#f0a88a' : skin}" ${st(6)}/>`;
+  // mocos
+  if (d > 0) {
+    const len = 24 + 16 * Math.sin(t * 2.2);
+    s += `<path d="M-14,-770 q-6,${len * 0.5} 0,${len} q9,8 13,-4 q0,${-len * 0.5} -3,${-len} Z" fill="#b5d96a" opacity="${d}" ${st(4)}/>`;
+  }
+  // boca
+  if (mouth === 'smile') s += `<path d="M-42,-718 Q0,-694 42,-718" fill="none" ${st(8)}/>`;
+  if (mouth === 'open') s += `<path d="M-48,-728 Q0,-672 48,-728 Z" fill="#7a1f2e" ${st(7)}/>`;
+  if (mouth === 'o') s += `<ellipse cx="0" cy="-712" rx="18" ry="22" fill="#7a1f2e" ${st(6)}/>`;
+  if (mouth === 'sad') s += `<path d="M-38,-700 Q0,-730 38,-700" fill="none" ${st(8)}/>`;
+  if (mouth === 'grit') s += `<rect x="-52" y="-738" width="104" height="36" rx="12" fill="#fff" ${st(7)}/><path d="M-52,-720 H52 M-18,-738 V-702 M18,-738 V-702" ${st(4)}/>`;
+  if (mouth === 'chew') s += (Math.sin(t * 22) > 0 ? `<path d="M-44,-726 Q0,-684 44,-726 Z" fill="#7a1f2e" ${st(7)}/>` : `<path d="M-38,-716 Q0,-704 38,-716" fill="none" ${st(8)}/>`) + `<circle cx="-50" cy="-700" r="6" fill="#e8b923"/><circle cx="44" cy="-694" r="5" fill="#e8b923"/>`;
+  // mal aliento
+  if (grime && d > 0 && ['open', 'chew', 'o', 'grit'].includes(mouth)) for (let i = 0; i < 3; i++) {
+    const k = (t * 0.9 + i / 3) % 1;
+    s += `<circle cx="${50 + k * 170}" cy="${-712 - k * 90 + Math.sin(k * 8) * 12}" r="${16 + k * 26}" fill="#9ccc4a" opacity="${(1 - k) * 0.55 * d}"/>`;
+  }
   // moscas
   if (grime && d > 0) for (let i = 0; i < 3; i++) {
     const a = t * (3.2 + i * 0.7) + i * 2.1;
-    const x = Math.cos(a) * 250 + Math.sin(a * 2.3) * 30, y = -880 + Math.sin(a * 1.3) * 140;
+    const x = Math.cos(a) * 260 + Math.sin(a * 2.3) * 30, y = -880 + Math.sin(a * 1.3) * 140;
     const fl = Math.sin(t * 90 + i) > 0 ? 14 : 8;
     s += `<g transform="translate(${x},${y})" opacity="${d}"><ellipse cx="-8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><ellipse cx="8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><circle r="10" fill="${OUT}"/></g>`;
   }
@@ -317,6 +367,19 @@ const SCENES = {
       <g transform="translate(760,1600)"><rect x="-70" y="-40" width="140" height="40" rx="6" fill="#e8d5b0" ${st(6)}/><path d="M-70,-40 L-50,-70 L90,-70 L70,-40" fill="#f3e3c3" ${st(6)}/></g>`;
     return s;
   },
+  // «Veintiséis años. Repitiendo primero por quinta vez.»
+  R(lt, t) {
+    let s = classroom(t);
+    s += place(hugo({ t, mood: 'normal', mouth: 'smile', look: -0.5, blink: blinkAt(t, 0.9) }), 540, 2240 + Math.sin(t * 3) * 5, 1.6);
+    s += desk(540, 1640, 820);
+    const k = back(seg(lt, 0.1, 0.4));
+    s += `<g transform="translate(540,450) rotate(5) scale(${k})">
+      <rect x="-260" y="-150" width="520" height="300" rx="20" fill="#fff" ${st(9)}/>
+      <text x="0" y="-70" text-anchor="middle" font-family="Fredoka" font-size="44" fill="${OUT}">1º DE CARRERA</text>
+      ${[0, 1, 2, 3, 4].map(i => `<text x="${-180 + i * 90}" y="40" text-anchor="middle" font-family="Lilita" font-size="70" fill="#e03131" opacity="${seg(lt, 0.4 + i * 0.12, 0.5 + i * 0.12)}">${['3', '2', '4', '1', '0'][i]}</text>`).join('')}
+      <text x="0" y="115" text-anchor="middle" font-family="Fredoka" font-size="38" fill="#e03131">INTENTO Nº 5</text></g>`;
+    return s;
+  },
   // «Lleva una semana sin ducharse.»
   S(lt, t) {
     let s = classroom(t) + `<rect width="1080" height="1920" fill="#8cc63f" opacity=".18"/>`;
@@ -383,7 +446,7 @@ const SCENES = {
       <text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="80" fill="#fff">FIN DE CURSO</text>
       <text x="0" y="215" text-anchor="middle" font-family="Fredoka" font-size="42" fill="#ff8ab0">VIERNES · 22:00 · GIMNASIO</text>
       <text x="0" y="300" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff" opacity=".7">¡VEN CON PAREJA!</text></g>`;
-    const ws = wordTime(5, 'treinta') - TL.lines[5].start;
+    const ws = wordTime(6, 'treinta') - TL.lines[6].start;
     const k = seg(lt, ws, ws + 0.22);
     if (k > 0) {
       const sc = lerp(3, 1, easeOut(k));
@@ -397,7 +460,7 @@ const SCENES = {
   F(lt, t) {
     let s = burst(540, 820, t, '#ff7a2f', '#ff9a45');
     const up = easeOut(seg(lt, 0.15, 0.45));
-    const tc = wordTime(6, 'cambiar') - TL.lines[6].start, kc = easeOut(seg(lt, tc - 0.1, tc + 0.35));
+    const tc = wordTime(7, 'cambiar') - TL.lines[7].start, kc = easeOut(seg(lt, tc - 0.1, tc + 0.35));
     s += `<defs><filter id="sil"><feFlood flood-color="#fff"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs>`;
     if (kc > 0) s += `<g opacity="${kc * 0.9}" filter="url(#sil)">${place(hugo({ g: 1, grime: false, mouth: 'smile' }), 800, 1880, 0.95)}</g>
       <text x="800" y="${980 + Math.sin(t * 4) * 10}" text-anchor="middle" font-family="Lilita" font-size="200" fill="#ff7a2f" ${st(12)} paint-order="stroke">?</text>`;
@@ -417,7 +480,7 @@ const SCENES = {
       const k = (lt * 0.6 + i / 3) % 1;
       s += `<text x="${300 + i * 240}" y="${lerp(1000, 820, k)}" text-anchor="middle" font-family="Lilita" font-size="${90 + i * 10}" fill="#ffd23f" opacity="${Math.sin(k * Math.PI)}" ${st(8)} paint-order="stroke">?</text>`;
     }
-    const tGym = wordTime(8, 'gimnasio'), tGui = wordTime(8, 'dieta');
+    const tGym = wordTime(9, 'gimnasio'), tGui = wordTime(9, 'dieta');
     const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
     const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
     s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tGym)), '#ff8a2a', 'GIMNASIO', DUMBBELL);
@@ -427,7 +490,7 @@ const SCENES = {
     return s;
   },
 };
-const SCENE_OF = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'G', 'G', 'G'];
+const SCENE_OF = ['A', 'R', 'S', 'B', 'C', 'D', 'E', 'F', 'G', 'G', 'G'];
 
 // ---------- subtítulos ----------
 function captions(t) {
@@ -461,11 +524,11 @@ function render(t) {
   const cam = lerp(1.1, 1, enter) * (1 + 0.035 * seg(lt, 0, 5));
   let shx = 0, shy = 0;
   if (sc === 'F' && lt < 0.6) { const a = (1 - lt / 0.6) * 18; shx = Math.sin(t * 90) * a; shy = Math.cos(t * 77) * a; }
-  const hudStart = L[4].start + 0.5;
+  const hudStart = L[5].start + 0.5;
   const pct = t < hudStart + 0.3 ? 50 : lerp(50, 5, easeOut(seg(t, hudStart + 0.3, hudStart + 1.3)));
   let hx = 0;
   if (t > hudStart + 1.1 && t < hudStart + 1.6) hx = Math.sin(t * 80) * 10 * (1 - seg(t, hudStart + 1.1, hudStart + 1.6));
-  const dayPulse = Math.max(0, Math.sin(seg(t, wordTime(5, 'treinta'), wordTime(5, 'treinta') + 0.4) * Math.PI), Math.sin(seg(t, wordTime(6, 'treinta'), wordTime(6, 'treinta') + 0.4) * Math.PI));
+  const dayPulse = Math.max(0, Math.sin(seg(t, wordTime(6, 'treinta'), wordTime(6, 'treinta') + 0.4) * Math.PI), Math.sin(seg(t, wordTime(7, 'treinta'), wordTime(7, 'treinta') + 0.4) * Math.PI));
   const flash = li === 0 ? 0 : (1 - seg(lt, 0, 0.12)) * 0.45;
   const fadeEnd = seg(t, TL.total - 0.7, TL.total);
 
