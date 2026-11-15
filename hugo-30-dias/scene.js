@@ -26,7 +26,7 @@ const LINES = [
   { text: 'Fiesta de fin de curso: en treinta días.', hl: ['treinta', 'días'] },
   { text: 'Hugo tiene treinta días para cambiar.', hl: ['cambiar'] },
   { text: '¿Por dónde empieza?', hl: ['empieza'] },
-  { text: 'Comenta: gimnasio o dieta.', hl: ['gimnasio', 'dieta'] },
+  { text: 'Comenta: ducha o gym.', hl: ['ducha', 'gym'] },
   { text: 'Sígueme para el día uno.', hl: ['día', 'uno'] },
 ];
 // glow-up de Hugo en este capítulo (0 = día 0, 1 = transformado)
@@ -325,6 +325,11 @@ const DUMBBELL = `<g transform="translate(0,-80) rotate(-20)">
   <rect x="-110" y="-12" width="220" height="24" rx="10" fill="#e9e9f2" ${st(7)}/>
   <rect x="-130" y="-60" width="40" height="120" rx="12" fill="#3a3a55" ${st(7)}/><rect x="90" y="-60" width="40" height="120" rx="12" fill="#3a3a55" ${st(7)}/>
   <rect x="-165" y="-40" width="34" height="80" rx="10" fill="#3a3a55" ${st(7)}/><rect x="131" y="-40" width="34" height="80" rx="10" fill="#3a3a55" ${st(7)}/></g>`;
+const SHOWER = `<g transform="translate(0,-80)">
+  <path d="M-120,-120 L-120,-150 Q-120,-170 -100,-170 L40,-170" fill="none" ${st(14)}/><path d="M-120,-120 L-120,-150 Q-120,-170 -100,-170 L40,-170" fill="none" stroke="#e9e9f2" stroke-width="6"/>
+  <path d="M-10,-170 L90,-170 L110,-110 L-30,-110 Z" fill="#e9e9f2" ${st(7)}/>
+  ${[-10, 25, 60, 95].map((x, i) => [0, 1, 2].map(j => `<ellipse cx="${x - j * 12}" cy="${-60 + j * 55 + (i % 2) * 20}" rx="9" ry="16" fill="#bfe3ff" ${st(5)}/>`).join('')).join('')}
+  <ellipse cx="-70" cy="100" rx="40" ry="22" fill="#fff" ${st(6)}/><ellipse cx="-30" cy="90" rx="26" ry="18" fill="#fff" ${st(6)}/></g>`;
 const BROCCOLI = `<g transform="translate(0,-70)">
   <ellipse cx="0" cy="70" rx="150" ry="34" fill="#fff" ${st(7)}/>
   <path d="M-22,60 L-14,-10 L14,-10 L22,60 Z" fill="#b6e07a" ${st(7)}/>
@@ -471,7 +476,7 @@ const SCENES = {
     }
     return s;
   },
-  // «¿Por dónde empieza? / Comenta: gimnasio o guitarra. / Sígueme para el día uno.»
+  // «¿Por dónde empieza? / Comenta: ducha o gym. / Sígueme para el día uno.»
   G(lt, t) {
     let s = classroom(t);
     s += `<rect width="1080" height="1920" fill="${OUT}" opacity=".45"/>`;
@@ -480,11 +485,11 @@ const SCENES = {
       const k = (lt * 0.6 + i / 3) % 1;
       s += `<text x="${300 + i * 240}" y="${lerp(1000, 820, k)}" text-anchor="middle" font-family="Lilita" font-size="${90 + i * 10}" fill="#ffd23f" opacity="${Math.sin(k * Math.PI)}" ${st(8)} paint-order="stroke">?</text>`;
     }
-    const tGym = wordTime(9, 'gimnasio'), tGui = wordTime(9, 'dieta');
+    const tA = wordTime(9, 'ducha'), tB = wordTime(9, 'gym');
     const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
     const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
-    s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tGym)), '#ff8a2a', 'GIMNASIO', DUMBBELL);
-    s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tGui)), '#2f9e44', 'DIETA', BROCCOLI);
+    s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tA)), '#3b8de0', 'DUCHA', SHOWER);
+    s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tB)), '#ff8a2a', 'GYM', DUMBBELL);
     const kv = back(seg(lt, 0.4, 0.7));
     s += `<text x="540" y="650" text-anchor="middle" font-family="Lilita" font-size="${130 * kv}" fill="#ffd23f" ${st(12)} paint-order="stroke">VS</text>`;
     return s;
