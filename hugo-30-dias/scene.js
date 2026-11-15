@@ -530,8 +530,28 @@ function captions(t) {
   }).join('');
 }
 
+// ---------- portada (primer fotograma) ----------
+const COVER = { day: 0 };
+function cover() {
+  let s = burst(540, 900, 0, '#ff7a2f', '#ffa94d');
+  s += `<defs><radialGradient id="cg" cx="50%" cy="47%" r="60%"><stop offset="0" stop-color="#ffe066" stop-opacity=".9"/><stop offset="1" stop-color="#ffe066" stop-opacity="0"/></radialGradient></defs><rect width="1080" height="1920" fill="url(#cg)"/>`;
+  s += place(hugo({ t: 1.35, mood: "normal", mouth: "open" }), 540, 2270, 1.5);
+  s += `<g transform="translate(540,530) rotate(-5)">
+    <text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="250" fill="#ffd23f" stroke="${OUT}" stroke-width="30" paint-order="stroke" stroke-linejoin="round">DÍA ${COVER.day}</text></g>`;
+  s += `<g transform="translate(540,1500) rotate(-2)">
+    <rect x="-470" y="-95" width="940" height="190" rx="40" fill="#ff2e48" ${st(10)}/>
+    <text x="0" y="-12" text-anchor="middle" font-family="Lilita" font-size="70" fill="#fff">30 DÍAS PARA</text>
+    <text x="0" y="62" text-anchor="middle" font-family="Lilita" font-size="70" fill="#ffd23f">CONQUISTAR A LAURA</text></g>`;
+  return s;
+}
+
 // ---------- fotograma ----------
 function render(t) {
+  if (t < 1 / 30) {
+    document.getElementById('s').innerHTML = cover();
+    document.getElementById('cap').innerHTML = '';
+    return;
+  }
   const L = TL.lines;
   let li = 0;
   for (let i = 0; i < L.length; i++) if (t >= L[i].start - 0.08) li = i;
