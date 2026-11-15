@@ -5,7 +5,7 @@ Uso: python3 sync.py voz.mp3
 """
 import json, re, subprocess, sys
 
-N_FRASES = 9
+N_FRASES = 10
 audio = sys.argv[1]
 
 dur = float(subprocess.check_output(

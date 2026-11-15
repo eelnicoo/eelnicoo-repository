@@ -18,15 +18,18 @@ const blinkAt = (t, off = 0) => ((t + off) % 3.3) < 0.12;
 // ---------- guion ----------
 const LINES = [
   { text: 'Este es Hugo.', hl: ['hugo'] },
-  { text: 'Lleva tres años enamorado de Laura.', hl: ['laura'] },
+  { text: 'Lleva una semana sin ducharse.', hl: ['sin', 'ducharse'] },
+  { text: 'Y tres años enamorado de Laura.', hl: ['laura'] },
   { text: 'Laura no sabe ni cómo se llama.', hl: ['no', 'sabe'] },
   { text: 'Porque Laura sale con Marcos.', hl: ['marcos'], red: ['marcos'] },
   { text: 'Fiesta de fin de curso: en treinta días.', hl: ['treinta', 'días'] },
-  { text: 'Hugo tiene treinta días para que Laura se fije en él.', hl: ['treinta', 'días'] },
+  { text: 'Hugo tiene treinta días para cambiar.', hl: ['cambiar'] },
   { text: '¿Por dónde empieza?', hl: ['empieza'] },
-  { text: 'Comenta: gimnasio o guitarra.', hl: ['gimnasio', 'guitarra'] },
+  { text: 'Comenta: gimnasio o dieta.', hl: ['gimnasio', 'dieta'] },
   { text: 'Sígueme para el día uno.', hl: ['día', 'uno'] },
 ];
+// glow-up de Hugo en este capítulo (0 = día 0, 1 = transformado)
+const GLOW = 0;
 const norm = w => w.toLowerCase().replace(/[¿?¡!.,:;]/g, '');
 
 // tiempos: los de timings.json (audio real) o una estimación
@@ -90,35 +93,76 @@ function eyes(cx, cy, o) {
 }
 
 function hugo(o = {}) {
-  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false } = o;
-  const skin = '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a', hair = '#d0662e';
+  // g: glow-up de 0 (gordo y guarro) a 1 (transformado). w: ancho del cuerpo. d: suciedad.
+  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = GLOW, t = 0, grime = true } = o;
+  const w = lerp(1.55, 1, g), d = clamp(1 - g * 2.2), fat = clamp(1 - g * 2);
+  const skin = '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a';
+  const hair = d > 0.5 ? '#9a4a22' : '#d0662e';
+  const lw = lerp(66, 88, fat), lx = lerp(12, 22, fat);
+  const fw = lerp(1, 1.1, fat); // cara más ancha
   let s = '';
-  s += `<rect x="-78" y="-400" width="66" height="370" rx="22" fill="${jeans}" ${st()}/>`;
-  s += `<rect x="12" y="-400" width="66" height="370" rx="22" fill="${jeans}" ${st()}/>`;
-  s += `<path d="M-105,-8 Q-105,-58 -48,-58 Q-6,-58 -6,-8 Z" fill="#fff" ${st()}/>`;
-  s += `<path d="M105,-8 Q105,-58 48,-58 Q6,-58 6,-8 Z" fill="#fff" ${st()}/>`;
-  s += arm(-128, -640, armL, hood, 64, 250, skin);
-  s += arm(128, -640, armR, hood, 64, 250, skin, fistR);
-  s += `<path d="M-138,-662 Q-152,-560 -122,-380 L122,-380 Q152,-560 138,-662 Q0,-700 -138,-662 Z" fill="${hood}" ${st()}/>`;
-  s += `<path d="M-72,-470 L72,-470 L88,-398 L-88,-398 Z" fill="${hoodD}" ${st(6)}/>`;
+  // tufo (detrás del cuerpo)
+  if (grime && d > 0) for (let i = 0; i < 4; i++) {
+    const k = ((t * 0.55 + i / 4) % 1), x = (i - 1.5) * 110 * w;
+    s += `<path d="M${x},${-600 - k * 520} q30,-40 0,-80 t0,-80 t0,-80" fill="none" stroke="#8cc63f" stroke-width="16" stroke-linecap="round" opacity="${Math.sin(k * Math.PI) * 0.75 * d}"/>`;
+  }
+  s += `<rect x="${-lx - lw}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
+  s += `<rect x="${lx}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
+  const so = (lx + lw / 2) - 45;
+  s += `<path d="M${-105 - so},-8 Q${-105 - so},-58 ${-48 - so},-58 Q${-6 - so},-58 ${-6 - so},-8 Z" fill="${d > 0.5 ? '#d9d2b8' : '#fff'}" ${st()}/>`;
+  s += `<path d="M${105 + so},-8 Q${105 + so},-58 ${48 + so},-58 Q${6 + so},-58 ${6 + so},-8 Z" fill="${d > 0.5 ? '#d9d2b8' : '#fff'}" ${st()}/>`;
+  const shx = 128 * lerp(1, 1.32, fat), aw = lerp(64, 84, fat);
+  s += arm(-shx, -640, armL + 6 * fat, hood, aw, 250, skin);
+  s += arm(shx, -640, armR - 6 * fat, hood, aw, 250, skin, fistR);
+  // barriga asomando por debajo de la sudadera
+  if (fat > 0.2) s += `<ellipse cx="0" cy="-392" rx="${125 * w}" ry="${62 * fat}" fill="${skin}" ${st()}/><path d="M-8,-380 q8,10 16,0" fill="none" ${st(5)}/>`;
+  const hy = lerp(-380, -425, fat);
+  s += `<path d="M${-138 * w},-662 Q${-185 * w},-540 ${-128 * w},${hy} L${128 * w},${hy} Q${185 * w},-540 ${138 * w},-662 Q0,-700 ${-138 * w},-662 Z" fill="${hood}" ${st()}/>`;
+  s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
   s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
   s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
+  if (d > 0) s += `<g opacity="${d}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
+      <path d="M${55 * w},-520 q24,-16 40,4 q8,26 -18,28 q-30,0 -22,-32 Z" fill="#c0392b"/>
+      <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/>
+      <circle cx="${-20}" cy="-640" r="6" fill="#e8b923"/><circle cx="${18}" cy="-625" r="5" fill="#e8b923"/></g>`;
   s += `<rect x="-30" y="-725" width="60" height="75" fill="${skin}" ${st()}/>`;
   s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
-  s += `<circle cx="-168" cy="-835" r="40" fill="${skin}" ${st()}/><circle cx="168" cy="-835" r="40" fill="${skin}" ${st()}/>`;
-  s += `<circle cx="0" cy="-850" r="172" fill="${skin}" ${st()}/>`;
-  s += `<path d="M-180,-840 Q-192,-1000 -62,-1032 L-42,-1080 L-2,-1038 L42,-1086 L72,-1030 Q192,-1008 180,-850 Q150,-950 62,-958 Q22,-928 -8,-960 Q-62,-930 -122,-952 Q-160,-900 -180,-840 Z" fill="${hair}" ${st()}/>`;
+  s += `<circle cx="${-168 * fw}" cy="-835" r="40" fill="${skin}" ${st()}/><circle cx="${168 * fw}" cy="-835" r="40" fill="${skin}" ${st()}/>`;
+  s += `<ellipse cx="0" cy="-850" rx="${172 * fw}" ry="172" fill="${skin}" ${st()}/>`;
+  if (fat > 0.3) s += `<path d="M-95,-700 Q0,-640 95,-700" fill="${skin}" ${st(7)}/>`;
+  if (d > 0.5) {
+    // pelo grasiento y aplastado, con mechones
+    s += `<path d="M${-188 * fw},-830 Q${-205 * fw},-1012 0,-1028 Q${205 * fw},-1012 ${188 * fw},-830 Q170,-930 122,-950 L112,-872 L82,-955 L42,-885 L20,-962 L-20,-880 L-52,-960 L-92,-875 L-112,-955 Q-172,-930 ${-188 * fw},-830 Z" fill="${hair}" ${st()}/>`;
+    s += `<path d="M-90,-1000 q40,-12 80,-6 M30,-1008 q40,-2 70,10" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".45" fill="none"/>`;
+  } else {
+    s += `<path d="M-180,-840 Q-192,-1000 -62,-1032 L-42,-1080 L-2,-1038 L42,-1086 L72,-1030 Q192,-1008 180,-850 Q150,-950 62,-958 Q22,-928 -8,-960 Q-62,-930 -122,-952 Q-160,-900 -180,-840 Z" fill="${hair}" ${st()}/>`;
+  }
   for (const sx of [-1, 1]) {
     s += `<circle cx="${sx * 98}" cy="-782" r="6" fill="#c97b52"/><circle cx="${sx * 118}" cy="-770" r="5" fill="#c97b52"/><circle cx="${sx * 96}" cy="-760" r="5" fill="#c97b52"/>`;
   }
+  if (d > 0) {
+    s += `<g opacity="${d * 0.55}" fill="#7a5a3a"><ellipse cx="-115" cy="-930" rx="26" ry="16"/><ellipse cx="120" cy="-770" rx="28" ry="15"/><ellipse cx="55" cy="-965" rx="16" ry="10"/></g>`;
+    let dots = '';
+    for (let i = 0; i < 26; i++) { const a = Math.PI * (0.12 + 0.76 * (i / 25)), r = 118 + (i % 3) * 14; dots += `<circle cx="${Math.cos(a) * r * 0.95}" cy="${-850 + Math.sin(a) * r * 1.05}" r="4"/>`; }
+    s += `<g fill="#5b3a26" opacity="${d * 0.7}">${dots}</g>`;
+  }
   if (mood === 'dream') s += `<ellipse cx="-105" cy="-768" rx="34" ry="18" fill="#ff7a8a" opacity=".55"/><ellipse cx="105" cy="-768" rx="34" ry="18" fill="#ff7a8a" opacity=".55"/>`;
   s += eyes(0, -850, o);
+  if (d > 0.5 && mood !== 'determined' && mood !== 'sad') s += `<path d="M-32,-906 Q0,-920 32,-906" fill="none" ${st(11)}/>`;
   s += `<path d="M-4,-800 Q12,-788 -2,-774" fill="none" ${st(6)}/>`;
   if (mouth === 'smile') s += `<path d="M-46,-738 Q0,-700 46,-738" fill="none" ${st(8)}/>`;
   if (mouth === 'open') s += `<path d="M-52,-745 Q0,-680 52,-745 Z" fill="#7a1f2e" ${st(7)}/>`;
   if (mouth === 'o') s += `<ellipse cx="0" cy="-728" rx="20" ry="26" fill="#7a1f2e" ${st(6)}/>`;
   if (mouth === 'sad') s += `<path d="M-40,-718 Q0,-752 40,-718" fill="none" ${st(8)}/>`;
   if (mouth === 'grit') s += `<rect x="-54" y="-756" width="108" height="40" rx="12" fill="#fff" ${st(7)}/><path d="M-54,-736 H54 M-18,-756 V-716 M18,-756 V-716" ${st(4)}/>`;
+  if (mouth === 'chew') s += (Math.sin(t * 22) > 0 ? `<path d="M-46,-742 Q0,-700 46,-742 Z" fill="#7a1f2e" ${st(7)}/>` : `<path d="M-40,-735 Q0,-722 40,-735" fill="none" ${st(8)}/>`) + `<circle cx="-50" cy="-715" r="6" fill="#e8b923"/><circle cx="42" cy="-708" r="5" fill="#e8b923"/>`;
+  // moscas
+  if (grime && d > 0) for (let i = 0; i < 3; i++) {
+    const a = t * (3.2 + i * 0.7) + i * 2.1;
+    const x = Math.cos(a) * 250 + Math.sin(a * 2.3) * 30, y = -880 + Math.sin(a * 1.3) * 140;
+    const fl = Math.sin(t * 90 + i) > 0 ? 14 : 8;
+    s += `<g transform="translate(${x},${y})" opacity="${d}"><ellipse cx="-8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><ellipse cx="8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><circle r="10" fill="${OUT}"/></g>`;
+  }
   return s;
 }
 
@@ -231,10 +275,11 @@ const DUMBBELL = `<g transform="translate(0,-80) rotate(-20)">
   <rect x="-110" y="-12" width="220" height="24" rx="10" fill="#e9e9f2" ${st(7)}/>
   <rect x="-130" y="-60" width="40" height="120" rx="12" fill="#3a3a55" ${st(7)}/><rect x="90" y="-60" width="40" height="120" rx="12" fill="#3a3a55" ${st(7)}/>
   <rect x="-165" y="-40" width="34" height="80" rx="10" fill="#3a3a55" ${st(7)}/><rect x="131" y="-40" width="34" height="80" rx="10" fill="#3a3a55" ${st(7)}/></g>`;
-const GUITAR = `<g transform="translate(10,-75) rotate(35)">
-  <rect x="-14" y="-160" width="28" height="170" rx="6" fill="#8a5a32" ${st(7)}/><rect x="-24" y="-195" width="48" height="45" rx="10" fill="#3a3a55" ${st(7)}/>
-  <circle cx="0" cy="40" r="62" fill="#ffb347" ${st(7)}/><circle cx="0" cy="110" r="78" fill="#ffb347" ${st(7)}/>
-  <circle cx="0" cy="58" r="22" fill="${OUT}"/><rect x="-30" y="128" width="60" height="14" rx="5" fill="#8a5a32"/></g>`;
+const BROCCOLI = `<g transform="translate(0,-70)">
+  <ellipse cx="0" cy="70" rx="150" ry="34" fill="#fff" ${st(7)}/>
+  <path d="M-22,60 L-14,-10 L14,-10 L22,60 Z" fill="#b6e07a" ${st(7)}/>
+  <circle cx="-55" cy="-30" r="50" fill="#2f9e44" ${st(7)}/><circle cx="55" cy="-30" r="50" fill="#2f9e44" ${st(7)}/>
+  <circle cx="0" cy="-75" r="58" fill="#37b24d" ${st(7)}/><circle cx="-20" cy="-90" r="10" fill="#8ce99a"/><circle cx="40" cy="-40" r="8" fill="#8ce99a"/></g>`;
 
 function hud(t, show, pct, dayPulse) {
   if (show <= 0) return '';
@@ -245,6 +290,8 @@ function hud(t, show, pct, dayPulse) {
     <rect x="36" y="60" width="200" height="146" rx="28" fill="${OUT}" opacity=".93" stroke="#fff" stroke-opacity=".15" stroke-width="4"/>
     <text x="136" y="108" text-anchor="middle" font-family="Fredoka" font-size="32" fill="#ffd23f">DÍAS</text>
     <text x="136" y="188" text-anchor="middle" font-family="Lilita" font-size="${80 * ds}" fill="#fff">30</text>
+    <rect x="36" y="222" width="200" height="62" rx="20" fill="${OUT}" opacity=".93"/>
+    <text x="136" y="264" text-anchor="middle" font-family="Lilita" font-size="34" fill="#ff9f43">GLOW ${Math.round(GLOW * 100)}%</text>
     <rect x="256" y="60" width="788" height="146" rx="28" fill="${OUT}" opacity=".93" stroke="#fff" stroke-opacity=".15" stroke-width="4"/>
     <text x="292" y="110" font-family="Fredoka" font-size="34" fill="#46d17f">HUGO</text>
     <text x="1008" y="110" text-anchor="end" font-family="Fredoka" font-size="34" fill="#ff4d5e">MARCOS</text>
@@ -263,15 +310,29 @@ const SCENES = {
   A(lt, t) {
     let s = classroom(t);
     const bob = Math.sin(t * 3) * 5;
-    s += place(hugo({ mood: 'normal', mouth: lt > 0.4 ? 'open' : 'smile', look: 0, blink: blinkAt(t), armR: lerp(-6, -150, easeOut(seg(lt, 0.3, 0.6))) + Math.sin(t * 14) * 12 * seg(lt, 0.6, 0.7) }), 540, 2240 + bob, 1.6);
+    s += place(hugo({ t, mood: 'normal', mouth: 'chew', look: 0, blink: blinkAt(t) }), 540, 2240 + bob, 1.6);
     s += desk(540, 1640, 820);
+    s += `<g transform="translate(330,1610) rotate(-12)"><path d="M0,0 L150,-40 L120,40 Z" fill="#ffcc5c" ${st(7)}/><path d="M0,0 L150,-40" stroke="#d4893a" stroke-width="22" stroke-linecap="round"/>
+      <circle cx="80" cy="-5" r="12" fill="#d9480f"/><circle cx="110" cy="10" r="10" fill="#d9480f"/></g>
+      <g transform="translate(760,1600)"><rect x="-70" y="-40" width="140" height="40" rx="6" fill="#e8d5b0" ${st(6)}/><path d="M-70,-40 L-50,-70 L90,-70 L70,-40" fill="#f3e3c3" ${st(6)}/></g>`;
     return s;
   },
-  // «Lleva tres años enamorado de Laura.»
+  // «Lleva una semana sin ducharse.»
+  S(lt, t) {
+    let s = classroom(t) + `<rect width="1080" height="1920" fill="#8cc63f" opacity=".18"/>`;
+    s += place(hugo({ t: t * 1.6, mood: 'normal', mouth: 'smile', look: Math.sin(t * 4) * 0.5, blink: blinkAt(t, 0.5) }), 540, 2330 + Math.sin(t * 3) * 5, 1.75);
+    const k = back(seg(lt, 0.15, 0.45)), n = Math.min(7, 1 + Math.floor(seg(lt, 0.3, 1.1) * 7));
+    s += `<g transform="translate(540,440) rotate(-4) scale(${k})">
+      <rect x="-300" y="-120" width="600" height="230" rx="34" fill="#fff" ${st(9)}/>
+      <text x="0" y="-38" text-anchor="middle" font-family="Fredoka" font-size="46" fill="${OUT}">DÍAS SIN DUCHA</text>
+      <text x="0" y="78" text-anchor="middle" font-family="Lilita" font-size="120" fill="#5c940d">${n}</text></g>`;
+    return s;
+  },
+  // «Y tres años enamorado de Laura.»
   B(lt, t) {
     let s = classroom(t);
     s += place(laura({ look: -0.2, blink: blinkAt(t, 1.1), mouth: 'smile' }), 790, 1640 + Math.sin(t * 2.6) * 4, 0.82);
-    s += place(hugo({ mood: 'dream', mouth: 'open', look: 1 }), 280, 1640 + Math.sin(t * 3) * 6, 0.82, Math.sin(t * 2) * 2);
+    s += place(hugo({ t, mood: 'dream', mouth: 'open', look: 1 }), 300, 1640 + Math.sin(t * 3) * 6, 0.82, Math.sin(t * 2) * 2);
     s += desk(280, 1450, 380) + desk(790, 1450, 380);
     for (let i = 0; i < 7; i++) {
       const k = ((lt * 0.7 + i / 7) % 1);
@@ -296,7 +357,7 @@ const SCENES = {
   D(lt, t) {
     let s = classroom(t);
     const mx = lerp(1450, 830, easeOut(seg(lt, 0, 0.55)));
-    s += place(hugo({ mood: 'sad', mouth: 'sad', look: 1, blink: blinkAt(t, 2) }), 190, 1700, 0.68);
+    s += place(hugo({ t, mood: 'sad', mouth: 'sad', look: 1, blink: blinkAt(t, 2) }), 200, 1700, 0.62);
     s += place(laura({ look: 1, blink: blinkAt(t, 0.7), mouth: 'smile' }), 560, 1690 + Math.sin(t * 2.6) * 4, 0.78);
     s += place(marcos({ t }), mx, 1700, 0.86);
     // corazón roto encima de Hugo
@@ -322,7 +383,7 @@ const SCENES = {
       <text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="80" fill="#fff">FIN DE CURSO</text>
       <text x="0" y="215" text-anchor="middle" font-family="Fredoka" font-size="42" fill="#ff8ab0">VIERNES · 22:00 · GIMNASIO</text>
       <text x="0" y="300" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff" opacity=".7">¡VEN CON PAREJA!</text></g>`;
-    const ws = wordTime(4, 'treinta') - TL.lines[4].start;
+    const ws = wordTime(5, 'treinta') - TL.lines[5].start;
     const k = seg(lt, ws, ws + 0.22);
     if (k > 0) {
       const sc = lerp(3, 1, easeOut(k));
@@ -336,7 +397,11 @@ const SCENES = {
   F(lt, t) {
     let s = burst(540, 820, t, '#ff7a2f', '#ff9a45');
     const up = easeOut(seg(lt, 0.15, 0.45));
-    s += place(hugo({ mood: 'determined', mouth: 'grit', armR: lerp(-6, -152, up), fistR: true, armL: 8 }), 540, lerp(2150, 1960, up), 1.18);
+    const tc = wordTime(6, 'cambiar') - TL.lines[6].start, kc = easeOut(seg(lt, tc - 0.1, tc + 0.35));
+    s += `<defs><filter id="sil"><feFlood flood-color="#fff"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs>`;
+    if (kc > 0) s += `<g opacity="${kc * 0.9}" filter="url(#sil)">${place(hugo({ g: 1, grime: false, mouth: 'smile' }), 800, 1880, 0.95)}</g>
+      <text x="800" y="${980 + Math.sin(t * 4) * 10}" text-anchor="middle" font-family="Lilita" font-size="200" fill="#ff7a2f" ${st(12)} paint-order="stroke">?</text>`;
+    s += place(hugo({ t, mood: 'determined', mouth: 'grit', armR: lerp(-6, -152, up), fistR: true, armL: 8 }), lerp(540, 330, kc), lerp(2150, 1960, up), lerp(1.18, 0.95, kc));
     for (let i = 0; i < 8; i++) {
       const k = (lt * 1.6 + i / 8) % 1, a = i * 0.8;
       s += `<path d="M${540 + Math.cos(a) * (420 + k * 300)},${800 + Math.sin(a) * (420 + k * 300)} l${Math.cos(a) * 90},${Math.sin(a) * 90}" stroke="#fff" stroke-width="12" stroke-linecap="round" opacity="${1 - k}"/>`;
@@ -347,22 +412,22 @@ const SCENES = {
   G(lt, t) {
     let s = classroom(t);
     s += `<rect width="1080" height="1920" fill="${OUT}" opacity=".45"/>`;
-    s += place(hugo({ mood: 'normal', mouth: 'o', look: Math.sin(t * 1.6), lookY: -1, blink: blinkAt(t, 1.4), armR: -150 + Math.sin(t * 3) * 4 }), 540, 2060 + Math.sin(t * 3) * 5, 1.15);
+    s += place(hugo({ t, mood: 'normal', mouth: 'o', look: Math.sin(t * 1.6), lookY: -1, blink: blinkAt(t, 1.4), armR: -150 + Math.sin(t * 3) * 4 }), 540, 2060 + Math.sin(t * 3) * 5, 1.15);
     for (let i = 0; i < 3; i++) {
       const k = (lt * 0.6 + i / 3) % 1;
       s += `<text x="${300 + i * 240}" y="${lerp(1000, 820, k)}" text-anchor="middle" font-family="Lilita" font-size="${90 + i * 10}" fill="#ffd23f" opacity="${Math.sin(k * Math.PI)}" ${st(8)} paint-order="stroke">?</text>`;
     }
-    const tGym = wordTime(7, 'gimnasio'), tGui = wordTime(7, 'guitarra');
+    const tGym = wordTime(8, 'gimnasio'), tGui = wordTime(8, 'dieta');
     const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
     const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
     s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tGym)), '#ff8a2a', 'GIMNASIO', DUMBBELL);
-    s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tGui)), '#8b5cf6', 'GUITARRA', GUITAR);
+    s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tGui)), '#2f9e44', 'DIETA', BROCCOLI);
     const kv = back(seg(lt, 0.4, 0.7));
     s += `<text x="540" y="650" text-anchor="middle" font-family="Lilita" font-size="${130 * kv}" fill="#ffd23f" ${st(12)} paint-order="stroke">VS</text>`;
     return s;
   },
 };
-const SCENE_OF = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'G', 'G'];
+const SCENE_OF = ['A', 'S', 'B', 'C', 'D', 'E', 'F', 'G', 'G', 'G'];
 
 // ---------- subtítulos ----------
 function captions(t) {
@@ -396,11 +461,11 @@ function render(t) {
   const cam = lerp(1.1, 1, enter) * (1 + 0.035 * seg(lt, 0, 5));
   let shx = 0, shy = 0;
   if (sc === 'F' && lt < 0.6) { const a = (1 - lt / 0.6) * 18; shx = Math.sin(t * 90) * a; shy = Math.cos(t * 77) * a; }
-  const hudStart = L[3].start + 0.5;
+  const hudStart = L[4].start + 0.5;
   const pct = t < hudStart + 0.3 ? 50 : lerp(50, 5, easeOut(seg(t, hudStart + 0.3, hudStart + 1.3)));
   let hx = 0;
   if (t > hudStart + 1.1 && t < hudStart + 1.6) hx = Math.sin(t * 80) * 10 * (1 - seg(t, hudStart + 1.1, hudStart + 1.6));
-  const dayPulse = Math.max(0, Math.sin(seg(t, wordTime(4, 'treinta'), wordTime(4, 'treinta') + 0.4) * Math.PI), Math.sin(seg(t, wordTime(5, 'treinta'), wordTime(5, 'treinta') + 0.4) * Math.PI));
+  const dayPulse = Math.max(0, Math.sin(seg(t, wordTime(5, 'treinta'), wordTime(5, 'treinta') + 0.4) * Math.PI), Math.sin(seg(t, wordTime(6, 'treinta'), wordTime(6, 'treinta') + 0.4) * Math.PI));
   const flash = li === 0 ? 0 : (1 - seg(lt, 0, 0.12)) * 0.45;
   const fadeEnd = seg(t, TL.total - 0.7, TL.total);
 
