@@ -1,41 +1,67 @@
 """Saca de la voz (MP3 de ElevenLabs) cuándo empieza y acaba cada frase del guion
 y lo guarda en timings.json, que usa render.js para cuadrar escenas y subtítulos.
 
+Detecta los tramos con voz (entre silencios) y los reparte entre las frases del
+guion de scene.js de forma que la duración de cada frase encaje con su longitud.
+Las pausas dentro de una frase se guardan como «partes» para cuadrar las palabras.
+
 Uso: python3 sync.py voz.mp3
 """
-import json, re, subprocess, sys
+import json, os, re, subprocess, sys
 
-N_FRASES = 11
+here = os.path.dirname(os.path.abspath(__file__))
 audio = sys.argv[1]
+scene = open(os.path.join(here, 'scene.js'), encoding='utf-8').read()
+block = scene[scene.index('const LINES'):scene.index('];', scene.index('const LINES'))]
+texts = re.findall(r"text: '([^']*)'", block)
+N = len(texts)
 
 dur = float(subprocess.check_output(
     ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', audio]).decode())
-log = subprocess.run(['ffmpeg', '-i', audio, '-af', 'silencedetect=noise=-38dB:d=0.16', '-f', 'null', '-'],
+log = subprocess.run(['ffmpeg', '-i', audio, '-af', 'silencedetect=noise=-38dB:d=0.12', '-f', 'null', '-'],
                      capture_output=True, text=True).stderr
 starts = [float(x) for x in re.findall(r'silence_start: ([\d.]+)', log)]
 ends = [float(x) for x in re.findall(r'silence_end: ([\d.]+)', log)]
 
-# tramos con voz = huecos entre silencios
 segs, cur = [], 0.0
 for s, e in zip(starts, ends + [dur] * (len(starts) - len(ends))):
     if s - cur > 0.08:
-        segs.append([cur, s])
+        segs.append((cur, s))
     cur = e
 if dur - cur > 0.08:
-    segs.append([cur, dur])
+    segs.append((cur, dur))
+M = len(segs)
+if M < N:
+    sys.exit(f'Solo hay {M} tramos de voz para {N} frases: genera el audio con pausas entre frases.')
 
-# juntar los tramos separados por las pausas más cortas hasta tener una por frase
-while len(segs) > N_FRASES:
-    gaps = [segs[i + 1][0] - segs[i][1] for i in range(len(segs) - 1)]
-    i = gaps.index(min(gaps))
-    segs[i:i + 2] = [[segs[i][0], segs[i + 1][1]]]
-# si faltan, partir el tramo más largo
-while len(segs) < N_FRASES:
-    i = max(range(len(segs)), key=lambda k: segs[k][1] - segs[k][0])
-    a, b = segs[i]
-    segs[i:i + 1] = [[a, (a + b) / 2], [(a + b) / 2, b]]
+# reparto óptimo: frases consecutivas <- grupos consecutivos de tramos
+w = [len(t) + 4 for t in texts]
+speech = sum(b - a for a, b in segs)
+exp = [speech * x / sum(w) for x in w]
+INF = float('inf')
+best = [[INF] * (M + 1) for _ in range(N + 1)]
+prev = [[0] * (M + 1) for _ in range(N + 1)]
+best[0][0] = 0
+for i in range(1, N + 1):
+    for j in range(i, M + 1):
+        for k in range(i - 1, j):
+            if best[i - 1][k] == INF:
+                continue
+            d = segs[j - 1][1] - segs[k][0]
+            # además, penaliza meter pausas largas dentro de una misma frase
+            inner = sum((segs[q + 1][0] - segs[q][1]) ** 2 for q in range(k, j - 1))
+            c = best[i - 1][k] + ((d - exp[i - 1]) / exp[i - 1]) ** 2 + 3 * inner
+            if c < best[i][j]:
+                best[i][j], prev[i][j] = c, k
+groups, j = [], M
+for i in range(N, 0, -1):
+    k = prev[i][j]
+    groups.append(segs[k:j])
+    j = k
+groups.reverse()
 
-json.dump({'lines': [[round(a, 3), round(b, 3)] for a, b in segs], 'total': round(dur + 1.0, 3)},
-          open(__file__.replace('sync.py', 'timings.json'), 'w'), indent=1)
-for i, (a, b) in enumerate(segs):
-    print(f'frase {i + 1}: {a:6.2f} -> {b:6.2f}')
+lines = [[round(g[0][0], 3), round(g[-1][1], 3), [[round(a, 3), round(b, 3)] for a, b in g]] for g in groups]
+json.dump({'lines': lines, 'total': round(dur + 1.0, 3)},
+          open(os.path.join(here, 'timings.json'), 'w'), indent=1)
+for t, (a, b, p) in zip(texts, lines):
+    print(f'{a:6.2f} -> {b:6.2f}  ({len(p)} parte/s)  {t}')

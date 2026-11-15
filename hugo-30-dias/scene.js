@@ -38,7 +38,7 @@ const TL = (() => {
   const o = window.TL_OVERRIDE;
   let lines, total;
   if (o && o.lines && o.lines.length === LINES.length) {
-    lines = o.lines.map(([s, e]) => ({ start: s, end: e }));
+    lines = o.lines.map(([s, e, parts]) => ({ start: s, end: e, parts: parts || [[s, e]] }));
     total = o.total;
   } else {
     let t = 0.35; lines = [];
@@ -50,7 +50,11 @@ const TL = (() => {
     const w8 = words.map(w => norm(w).length + 2);
     const sum = w8.reduce((a, b) => a + b, 0);
     let acc = 0;
-    ln.words = words.map((w, j) => { const ws = ln.start + (ln.end - ln.start) * acc / sum; acc += w8[j]; return { w, n: norm(w), t: ws }; });
+    // reparte las palabras por el tiempo con voz (saltando las pausas internas)
+    const parts = ln.parts || [[ln.start, ln.end]];
+    const talk = parts.reduce((a, [x, y]) => a + (y - x), 0);
+    const at = f => { let r = f * talk; for (const [x, y] of parts) { if (r <= y - x) return x + r; r -= y - x; } return ln.end; };
+    ln.words = words.map((w, j) => { const ws = at(acc / sum); acc += w8[j]; return { w, n: norm(w), t: ws }; });
     // trozos de subtítulo: máx. 3 palabras, corte tras puntuación
     ln.chunks = []; let cur = [];
     ln.words.forEach((wd, j) => { cur.push(j); if (cur.length === 3 || /[.,:?]$/.test(wd.w)) { ln.chunks.push(cur); cur = []; } });
