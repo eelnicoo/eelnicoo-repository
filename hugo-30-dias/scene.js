@@ -584,3 +584,32 @@ function render(t) {
 }
 window.render = render;
 render(0);
+
+// ---------- efectos de sonido ----------
+// Cada efecto: { t: segundo, f: archivo de sfx/, v: volumen, d: duración máxima opcional }
+window.sfxCues = function () {
+  const L = TL.lines, c = [];
+  const add = (t, f, v, d) => c.push({ t: Math.max(0, t), f, v, d });
+  add(0.05, 'buzz', 0.22, L[2].end);                         // moscas mientras se le presenta
+  add(L[0].end - 0.05, 'burp', 0.5);                          // «Este es Hugo.» *eructo*
+  add(L[1].start + 0.1, 'pop', 0.5);                          // sale la acreditación
+  add(wordTime(1, 'becario'), 'boing', 0.4);
+  for (let i = 0; i < 7; i++) add(L[2].start - 0.08 + 0.3 + i * 0.115, 'tick', 0.45); // contador de días sin ducha
+  add(L[3].start, 'sparkle', 0.4);                            // corazones
+  add(L[4].start - 0.08 + 0.25, 'pop', 0.55);                 // bocadillo de Laura
+  add(L[5].start - 0.08, 'whoosh', 0.6);                      // entra Marcos
+  add(L[5].start + 0.35, 'sparkle', 0.3);
+  add(L[5].start - 0.08 + 0.7, 'crack', 0.55);                // corazón roto
+  add(L[5].start + 0.85, 'fail', 0.22);                       // la barra se hunde
+  add(wordTime(6, 'treinta'), 'stamp', 0.75);                 // sello «EN 30 DÍAS»
+  add(L[7].start - 0.08, 'whoosh', 0.4);
+  add(L[7].start, 'impact', 0.6);                             // Hugo se levanta
+  add(wordTime(7, 'cambiar') - 0.1, 'magic', 0.5);            // silueta del Hugo transformado
+  add(L[8].start + 0.12, 'pop', 0.5);                         // cartas
+  add(L[8].start + 0.28, 'pop', 0.5);
+  add(L[8].start + 0.42, 'impact', 0.25);                     // VS
+  add(wordTime(9, 'ducha'), 'ding', 0.3);
+  add(wordTime(9, 'gym'), 'boing', 0.35);
+  add(TL.total - 0.9, 'whoosh', 0.3);
+  return c;
+};

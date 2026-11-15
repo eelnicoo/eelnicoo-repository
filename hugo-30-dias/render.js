@@ -38,10 +38,23 @@ const FPS = 30;
   }
 
   const outFile = path.join(dir, 'out', 'capitulo-01.mp4');
-  const ff = ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-'];
-  if (audio) ff.push('-i', audio);
+  const ff = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-'];
+  // audio: voz + efectos de sonido colocados en su segundo
+  const cues = await page.evaluate(() => (window.sfxCues ? window.sfxCues() : []));
+  const ins = [];
+  if (audio) ins.push({ file: audio, chain: 'volume=1.0' });
+  for (const c of cues) {
+    const ms = Math.round(c.t * 1000);
+    ins.push({ file: path.join(dir, 'sfx', c.f + '.wav'), chain: `${c.d ? `atrim=0:${(c.d - c.t).toFixed(3)},afade=t=out:st=${Math.max(0, c.d - c.t - 0.4).toFixed(3)}:d=0.4,` : ''}volume=${c.v},adelay=${ms}|${ms}` });
+  }
+  ins.forEach(i => ff.push('-i', i.file));
   ff.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(FPS));
-  if (audio) ff.push('-c:a', 'aac', '-b:a', '192k', '-af', 'apad', '-shortest');
+  if (ins.length) {
+    const parts = ins.map((i, k) => `[${k + 1}:a]aformat=sample_rates=44100:channel_layouts=stereo,${i.chain}[a${k}]`);
+    const mix = ins.map((_, k) => `[a${k}]`).join('') + `amix=inputs=${ins.length}:normalize=0:duration=longest,loudnorm=I=-15:TP=-1.5:LRA=11,aresample=44100,apad[aout]`;
+    ff.push('-filter_complex', parts.join(';') + ';' + mix, '-map', '0:v', '-map', '[aout]', '-t', total.toFixed(3), '-c:a', 'aac', '-b:a', '192k');
+    console.log(`Audio: ${audio ? 'voz + ' : ''}${cues.length} efectos`);
+  }
   ff.push('-movflags', '+faststart', outFile);
   const proc = spawn('ffmpeg', ff, { stdio: ['pipe', 'ignore', 'inherit'] });
   const n = Math.ceil(total * FPS);
