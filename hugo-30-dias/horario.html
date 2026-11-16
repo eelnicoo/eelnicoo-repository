@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Horario Hugo</title>
+<style>
+@font-face { font-family: Lilita; src: url(fonts/LilitaOne.ttf); }
+@font-face { font-family: Fredoka; src: url(fonts/Fredoka-SemiBold.ttf); }
+html, body { margin: 0; background: #000; }
+#cap { display: none; }
+</style></head>
+<body>
+<svg id="s" viewBox="0 0 1080 1920" width="1080" height="1920" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="cap"></div>
+<script src="lib.js"></script>
+<script>
+// Vídeo corto para anclar: a qué hora sale cada capítulo en cada país (20:00 en España, horario de invierno)
+const EP = { glow: 0 };
+const ROWS = [
+  ['🇪🇸', 'ESPAÑA', '20:00'],
+  ['🇲🇽', 'MÉXICO', '13:00'],
+  ['🇨🇴 🇵🇪 🇪🇨', 'COLOMBIA · PERÚ · ECUADOR', '14:00'],
+  ['🇻🇪 🇧🇴', 'VENEZUELA · BOLIVIA', '15:00'],
+  ['🇦🇷 🇨🇱 🇺🇾', 'ARGENTINA · CHILE · URUGUAY', '16:00'],
+];
+window.TOTAL = 6;
+window.ROW_T = ROWS.map((_, i) => 0.6 + i * 0.3);
+function renderH(t) {
+  let s = burst(540, 900, t * 0.5, '#ff7a2f', '#ffa94d');
+  s += place(hugo({ t, g: 0, mood: 'normal', mouth: 'open', look: -0.5, lookY: -1, blink: blinkAt(t), armR: -150 + Math.sin(t * 6) * 6 }), 540, 2400 + Math.sin(t * 3) * 6, 0.95);
+  const k = back(seg(t, 0.05, 0.4));
+  s += `<g transform="translate(540,250) rotate(-3) scale(${k})">
+    <text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="110" fill="#ffd23f" stroke="${OUT}" stroke-width="22" paint-order="stroke" stroke-linejoin="round">CAPÍTULO NUEVO</text>
+    <text x="0" y="125" text-anchor="middle" font-family="Lilita" font-size="130" fill="#fff" stroke="${OUT}" stroke-width="22" paint-order="stroke" stroke-linejoin="round">CADA DÍA</text></g>`;
+  s += `<rect x="70" y="420" width="940" height="790" rx="44" fill="#fff" ${st(10)}/>`;
+  ROWS.forEach(([flags, name, hour], i) => {
+    const y = 500 + i * 148, kr = back(seg(t, ROW_T[i], ROW_T[i] + 0.3));
+    if (kr <= 0) return;
+    const es = i === 0;
+    s += `<g transform="translate(540,${y + 30}) scale(${kr}) translate(-540,${-(y + 30)})">`;
+    if (es) s += `<rect x="92" y="${y - 50}" width="896" height="150" rx="30" fill="#ffe8cc"/>`;
+    if (i > 0) s += `<path d="M120,${y - 52} H960" stroke="#e9ecef" stroke-width="4"/>`;
+    s += `<text x="120" y="${y + 18}" font-size="62">${flags}</text>`;
+    s += `<text x="120" y="${y + 74}" font-family="Fredoka" font-size="${name.length > 20 ? 30 : 36}" fill="#495057">${name}</text>`;
+    s += `<text x="955" y="${y + 52}" text-anchor="end" font-family="Lilita" font-size="${es ? 112 : 96}" fill="${es ? '#ff2e48' : OUT}">${hour}</text>`;
+    s += `</g>`;
+  });
+  const kb = back(seg(t, 2.4, 2.7));
+  s += `<g transform="translate(540,1810) rotate(-2) scale(${kb})">
+    <rect x="-480" y="-70" width="960" height="140" rx="36" fill="#ff2e48" ${st(9)}/>
+    <text x="0" y="24" text-anchor="middle" font-family="Lilita" font-size="60" fill="#fff">¡SÍGUEME Y NO TE LO PIERDAS!</text></g>`;
+  document.getElementById('s').innerHTML = s + `<rect width="1080" height="1920" fill="#000" opacity="${seg(t, 5.6, 6)}"/>`;
+}
+window.render = renderH;
+renderH(0);
+</script>
+</body></html>
