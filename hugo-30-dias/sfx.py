@@ -146,4 +146,32 @@ t = T(1.2)
 x += 0.15 * hp(rng.standard_normal(len(t)), 6000) * np.sin(np.pi * t / 1.2)
 save('magic', x, 0.7)
 
+# water: ducha corriendo (4 s)
+t = T(4)
+n = rng.standard_normal(len(t))
+save('water', bp(n, 1500, 7000) * (0.8 + 0.2 * np.sin(2 * np.pi * 3 * t)) + 0.3 * bp(n, 300, 900), 0.6)
+
+# glug: desagüe atascado
+x = np.zeros(int(SR * 1.4))
+for i in range(7):
+    t = T(0.16)
+    s0 = int((0.05 + i * 0.18 + 0.03 * rng.standard_normal()) * SR)
+    f0 = 140 + 60 * rng.random()
+    b = np.sin(2 * np.pi * np.cumsum(f0 + 500 * (t / 0.16) ** 2) / SR) * np.exp(-t * 18)
+    x[s0:s0 + len(t)] += b[:len(x[s0:s0 + len(t)])]
+save('glug', lp(x, 1800))
+
+# pfff: bote vacío que solo echa aire
+t = T(0.6)
+flutter = 0.5 + 0.5 * np.sign(np.sin(2 * np.pi * (38 + 20 * t) * t))
+save('pfff', (bp(rng.standard_normal(len(t)), 200, 2500) * 0.7 + 0.5 * saw(np.full(len(t), 95.0))) * flutter * np.sin(np.pi * t / 0.6) ** 0.5, 0.8)
+
+# chatter: dientes castañeteando
+x = np.zeros(int(SR * 1.2))
+for i in range(22):
+    s0 = int(i * 0.052 * SR)
+    t = T(0.025)
+    x[s0:s0 + len(t)] += np.sin(2 * np.pi * (2600 + 400 * (i % 2)) * t) * np.exp(-t * 200)
+save('chatter', x, 0.7)
+
 print('Efectos:', ', '.join(sorted(f[:-4] for f in os.listdir(OUT))))

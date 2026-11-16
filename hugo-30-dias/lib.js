@@ -90,7 +90,9 @@ function hugo(o = {}) {
   const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = EP.glow, t = 0, grime = true, look = 0, lookY = 0, blink = false } = o;
   const w = lerp(1.55, 1, g), d = clamp(1 - g * 2.2), fat = clamp(1 - g * 2);
   const su = o.sucio ?? (EP.sucio ?? d); // suciedad: moscas, tufo, manchas, mocos, aliento
-  const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a';
+  const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', jeans = '#3b5a9a';
+  const nk = !!o.naked; // sin sudadera (en la ducha)
+  const hood = nk ? skin : '#3fae6a', hoodD = nk ? '#e0a47c' : '#2b8a50';
   const hair = '#a8552a', beardC = '#6b3f22';
   const lw = lerp(66, 88, fat), lx = lerp(12, 22, fat);
   let s = '';
@@ -117,14 +119,15 @@ function hugo(o = {}) {
   }
   const hy = lerp(-380, -425, fat);
   s += `<path d="M${-138 * w},-662 Q${-185 * w},-540 ${-128 * w},${hy} L${128 * w},${hy} Q${185 * w},-540 ${138 * w},-662 Q0,-700 ${-138 * w},-662 Z" fill="${hood}" ${st()}/>`;
-  s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
-  s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
-  s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
-  if (su > 0) s += `<g opacity="${su}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
+  if (!nk) s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
+  if (nk) { let ch = ''; for (let i = 0; i < 22; i++) { const x = ((i * 47) % 200) - 100, y = -640 + ((i * 31) % 150); ch += `M${x},${y} q5,-9 10,-2 `; } s += `<path d="${ch}" fill="none" stroke="#5b3a26" stroke-width="3.5" stroke-linecap="round"/><circle cx="-60" cy="-560" r="7" fill="#d98c74"/><circle cx="60" cy="-560" r="7" fill="#d98c74"/>`; }
+  if (!nk) s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
+  if (!nk) s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
+  if (su > 0 && !nk) s += `<g opacity="${su}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
       <path d="M${55 * w},-520 q24,-16 40,4 q8,26 -18,28 q-30,0 -22,-32 Z" fill="#c0392b"/>
       <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/></g>`;
   s += `<rect x="-34" y="-725" width="68" height="75" fill="${skin}" ${st()}/>`;
-  s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
+  if (!nk) s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
   // cabeza: forma de pera, más ancha abajo (mofletes) cuanto más gordo
   const jw = lerp(0.86, 1.08, fat);
   s += `<circle cx="-186" cy="-842" r="36" fill="${skin}" ${st()}/><circle cx="186" cy="-842" r="36" fill="${skin}" ${st()}/>`;
@@ -311,13 +314,13 @@ function burst(cx, cy, t, c1, c2) {
   }
   return s;
 }
-function card(x, y, rot, sc, color, label, icon) {
+function card(x, y, rot, sc, color, label, icon, sub = '¿PRIMERO?') {
   return `<g transform="translate(${x},${y}) rotate(${rot}) scale(${sc})">
     <rect x="-190" y="-250" width="380" height="500" rx="38" fill="#fff" ${st(9)}/>
     <rect x="-168" y="-228" width="336" height="300" rx="26" fill="${color}"/>
     ${icon}
     <text x="0" y="148" text-anchor="middle" font-family="Lilita" font-size="66" fill="${OUT}">${label}</text>
-    <text x="0" y="205" text-anchor="middle" font-family="Fredoka" font-size="36" fill="${color}">¿PRIMERO?</text>
+    <text x="0" y="205" text-anchor="middle" font-family="Fredoka" font-size="36" fill="${color}">${sub}</text>
   </g>`;
 }
 const DUMBBELL = `<g transform="translate(0,-80) rotate(-20)">
