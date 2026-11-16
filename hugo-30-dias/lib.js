@@ -193,8 +193,15 @@ function hugo(o = {}) {
   // boca
   if (mouth === 'smile') s += `<path d="M-42,-718 Q0,-694 42,-718" fill="none" ${st(8)}/>`;
   // dientes amarillos y torcidos (con uno de menos) mientras va descuidado
-  const teeth = (y0) => d > 0.5 ? `<g>${[[-38, 0, 2], [-19, 3, -4], [0, -1, 3], [38, 2, 5]].map(([x, dy, r]) => `<rect x="${x - 9}" y="${y0 + dy}" width="18" height="${d > 0.5 ? 20 : 0}" rx="4" transform="rotate(${r},${x},${y0})" fill="#e3c75c" stroke="${OUT}" stroke-width="3"/>`).join('')}</g>` : '';
+  const tk = o.teeth ?? EP.teeth ?? (d > 0.5 ? 'yellow' : 'none');
+  const teeth = (y0) => {
+    if (tk === 'yellow') return `<g>${[[-38, 0, 2], [-19, 3, -4], [0, -1, 3], [38, 2, 5]].map(([x, dy, r]) => `<rect x="${x - 9}" y="${y0 + dy}" width="18" height="20" rx="4" transform="rotate(${r},${x},${y0})" fill="#e3c75c" stroke="${OUT}" stroke-width="3"/>`).join('')}</g>`;
+    if (tk === 'white' || tk === 'glow') return `<g>${[-36, -18, 0, 18, 36].map(x => `<rect x="${x - 9}" y="${y0}" width="18" height="20" rx="4" fill="#fff" stroke="${OUT}" stroke-width="3"/>`).join('')}</g>` +
+      (tk === 'glow' ? `<circle cx="0" cy="${y0 + 10}" r="120" fill="#fffbe6" opacity=".35"/><circle cx="0" cy="${y0 + 10}" r="70" fill="#fff" opacity=".5"/>` : '');
+    return '';
+  };
   if (mouth === 'open') s += `<path d="M-48,-728 Q0,-672 48,-728 Z" fill="#7a1f2e" ${st(7)}/>` + teeth(-731);
+  if (mouth === 'grin') s += `<path d="M-60,-732 Q0,-660 60,-732 Z" fill="#7a1f2e" ${st(7)}/>` + teeth(-733);
   if (mouth === 'o') s += `<ellipse cx="0" cy="-712" rx="18" ry="22" fill="#7a1f2e" ${st(6)}/>`;
   if (mouth === 'sad') s += `<path d="M-38,-700 Q0,-730 38,-700" fill="none" ${st(8)}/>`;
   if (mouth === 'grit') s += `<rect x="-52" y="-738" width="104" height="36" rx="12" fill="#fff" ${st(7)}/><path d="M-52,-720 H52 M-18,-738 V-702 M18,-738 V-702" ${st(4)}/>`;
@@ -236,6 +243,7 @@ function laura(o = {}) {
   for (const sx of [-1, 1]) {
     const x = sx * 58, y = -845;
     if (blink) { s += `<path d="M${x - 30},${y} Q${x},${y + 14} ${x + 30},${y}" fill="none" ${st(7)}/>`; continue; }
+    if (mouth === 'laugh') { s += `<path d="M${x - 30},${y + 6} Q${x},${y - 26} ${x + 30},${y + 6}" fill="none" ${st(8)}/>`; continue; }
     s += `<ellipse cx="${x}" cy="${y}" rx="32" ry="38" fill="#fff" ${st()}/>`;
     s += `<circle cx="${x + look * 12}" cy="${y + 6}" r="19" fill="#5a3a26"/><circle cx="${x + look * 12}" cy="${y + 6}" r="10" fill="${OUT}"/><circle cx="${x + look * 12 + 6}" cy="${y - 2}" r="6" fill="#fff"/>`;
     s += `<path d="M${x + sx * 22},${y - 34} l${sx * 16},-16 M${x + sx * 32},${y - 22} l${sx * 18},-10" ${st(6)}/>`;
@@ -245,6 +253,7 @@ function laura(o = {}) {
   s += `<path d="M-2,-800 Q10,-790 0,-780" fill="none" ${st(5)}/>`;
   if (mouth === 'smile') s += `<path d="M-38,-742 Q0,-708 38,-742 Z" fill="#d93a5e" ${st(6)}/>`;
   if (mouth === 'flat') s += `<path d="M-30,-735 Q0,-728 30,-738" fill="none" ${st(7)}/>`;
+  if (mouth === 'laugh') s += `<path d="M-50,-750 Q0,-670 50,-750 Z" fill="#a61e4d" ${st(6)}/><path d="M-36,-748 H36" stroke="#fff" stroke-width="12"/>`;
   return s;
 }
 
@@ -508,4 +517,70 @@ function introCues(add) {
   add(L[3].start - 0.08, 'whoosh', 0.4);
   add(L[3].start - 0.08 + (L[3].end - L[3].start) * 0.35 + 0.08, 'magic', 0.5);
   add(wordTime(3, norm(EP.dayWord)), 'ding', 0.35);
+}
+
+// ---------- iconos de cartas compartidos ----------
+const TOOTH = `<g transform="translate(0,-80)">
+  <path d="M-90,-110 Q-120,-150 -60,-160 Q-20,-165 0,-140 Q20,-165 60,-160 Q120,-150 90,-110 Q80,-40 70,40 Q60,110 35,110 Q10,110 10,40 Q0,10 -10,40 Q-10,110 -35,110 Q-60,110 -70,40 Q-80,-40 -90,-110 Z" fill="#fff6d0" ${st(8)}/>
+  <ellipse cx="-30" cy="-60" rx="22" ry="14" fill="#e3c75c"/><ellipse cx="40" cy="-10" rx="18" ry="24" fill="#e3c75c"/><circle cx="-10" cy="40" r="10" fill="#8a6d1f"/></g>`;
+const SCISSORS = `<g transform="translate(0,-80) rotate(-30)">
+  <path d="M-10,-10 L-120,-150 M10,-10 L120,-150" ${st(20)}/><path d="M-10,-10 L-120,-150 M10,-10 L120,-150" stroke="#dee2e6" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="-60" cy="90" r="50" fill="none" stroke="${OUT}" stroke-width="24"/><circle cx="-60" cy="90" r="50" fill="none" stroke="#f03e3e" stroke-width="12"/>
+  <circle cx="60" cy="90" r="50" fill="none" stroke="${OUT}" stroke-width="24"/><circle cx="60" cy="90" r="50" fill="none" stroke="#f03e3e" stroke-width="12"/>
+  <path d="M-10,-10 L-45,50 M10,-10 L45,50" ${st(18)}/><circle cx="0" cy="-10" r="12" fill="#adb5bd" ${st(5)}/></g>`;
+
+// ---------- resultado de la votación anterior ----------
+// EP.vote = { a: { label, pct, color, icon }, b: { … } }; li: frase «Habéis votado… y ganó …»
+function voteScene(lt, t, li) {
+  let s = burst(540, 820, t, '#1d1630', '#2a2350');
+  const { a, b } = EP.vote, fill = easeOut(seg(lt, 0.35, 1.2));
+  const tw = wordTime(li, 'ganó') - TL.lines[li].start + 0.08;
+  const win = easeOut(seg(lt, tw, tw + 0.35));
+  const k1 = back(seg(lt, 0.05, 0.35)), k2 = back(seg(lt, 0.15, 0.45));
+  const aWins = a.pct >= b.pct;
+  const pos = (isWin, x) => isWin ? [lerp(x, 540, win), lerp(620, 640, win), lerp(1, 1.35, win), 0] : [x + (x < 540 ? -1 : 1) * 300 * win, 620 + 600 * win * win, 1, (x < 540 ? -1 : 1) * 25 * win];
+  const [ax, ay, as, ar] = pos(aWins, 290), [bx, by, bs, br] = pos(!aWins, 790);
+  const pct = (p) => Math.round(p * fill);
+  const ca = card(ax, ay, -6 + ar, k1 * as, a.color, a.label, a.icon, `${pct(a.pct)}%`);
+  const cb = card(bx, by, 6 + br, k2 * bs, b.color, b.label, b.icon, `${pct(b.pct)}%`);
+  s += aWins ? `<g opacity="${1 - win}">${cb}</g>` + ca : `<g opacity="${1 - win}">${ca}</g>` + cb;
+  if (win < 0.5) s += `<text x="540" y="660" text-anchor="middle" font-family="Lilita" font-size="130" fill="#ffd23f" ${st(12)} paint-order="stroke" opacity="${1 - win * 2}">VS</text>`;
+  const ks = seg(lt, tw + 0.25, tw + 0.45);
+  if (ks > 0) s += `<g transform="translate(560,1000) rotate(-10) scale(${lerp(2.6, 1, easeOut(ks))})" opacity="${ks}">
+    <rect x="-330" y="-80" width="660" height="160" rx="22" fill="#fff4e0" stroke="#2f9e44" stroke-width="14"/>
+    <text x="0" y="35" text-anchor="middle" font-family="Lilita" font-size="96" fill="#2f9e44">¡HA GANADO!</text></g>`;
+  s += `<text x="540" y="300" text-anchor="middle" font-family="Fredoka" font-size="52" fill="#fff" opacity="${seg(lt, 0, 0.3)}">VUESTRA VOTACIÓN</text>`;
+  return s;
+}
+function voteCues(add, li) {
+  const v0 = TL.lines[li].start - 0.08;
+  add(v0 + 0.05, 'pop', 0.5); add(v0 + 0.15, 'pop', 0.5);
+  for (let i = 0; i < 8; i++) add(v0 + 0.35 + i * 0.1, 'tick', 0.35);
+  add(wordTime(li, 'ganó') + 0.33, 'stamp', 0.75);
+  add(wordTime(li, 'ganó') + 0.4, 'sparkle', 0.4);
+}
+// votación para mañana: dos cartas sobre Hugo pensando
+function nextVoteScene(lt, t, li, A, B, hugoOpts = {}) {
+  let s = classroom(t) + `<rect width="1080" height="1920" fill="${OUT}" opacity=".45"/>`;
+  s += place(hugo(Object.assign({ t, mood: 'normal', mouth: 'o', look: Math.sin(t * 1.6), lookY: -1, blink: blinkAt(t, 1.4), armR: -150 + Math.sin(t * 3) * 4 }, hugoOpts)), 540, 2060 + Math.sin(t * 3) * 5, 1.15);
+  const tA = wordTime(li, norm(A.word)), tB = wordTime(li, norm(B.word));
+  const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
+  const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
+  s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tA)), A.color, A.label, A.icon, '¿MAÑANA?');
+  s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tB)), B.color, B.label, B.icon, '¿MAÑANA?');
+  const kv = back(seg(lt, 0.4, 0.7));
+  s += `<text x="540" y="650" text-anchor="middle" font-family="Lilita" font-size="${130 * kv}" fill="#ffd23f" ${st(12)} paint-order="stroke">VS</text>`;
+  return s;
+}
+function nextVoteCues(add, li, A, B) {
+  const L = TL.lines;
+  add(L[li].start + 0.12, 'pop', 0.5); add(L[li].start + 0.28, 'pop', 0.5);
+  add(L[li].start + 0.42, 'impact', 0.25);
+  add(wordTime(li, norm(A.word)), 'boing', 0.35);
+  add(wordTime(li, norm(B.word)), 'ding', 0.3);
+  add(TL.total - 0.9, 'whoosh', 0.3);
+}
+// destello «+N %» bajo el marcador
+function plusBadge(t, tc, n) {
+  return t > tc && t < tc + 1.0 ? `<g transform="translate(270,${440 - 60 * seg(t, tc, tc + 1.0)})" opacity="${1 - seg(t, tc + 0.6, tc + 1.0)}"><text font-family="Lilita" font-size="80" fill="#46d17f" stroke="${OUT}" stroke-width="12" paint-order="stroke">+${n}%</text></g>` : '';
 }

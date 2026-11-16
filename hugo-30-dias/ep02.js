@@ -58,9 +58,6 @@ function bubbles(t, cx, cy, n, r0) {
   }
   return s;
 }
-const TOOTH = `<g transform="translate(0,-80)">
-  <path d="M-90,-110 Q-120,-150 -60,-160 Q-20,-165 0,-140 Q20,-165 60,-160 Q120,-150 90,-110 Q80,-40 70,40 Q60,110 35,110 Q10,110 10,40 Q0,10 -10,40 Q-10,110 -35,110 Q-60,110 -70,40 Q-80,-40 -90,-110 Z" fill="#fff6d0" ${st(8)}/>
-  <ellipse cx="-30" cy="-60" rx="22" ry="14" fill="#e3c75c"/><ellipse cx="40" cy="-10" rx="18" ry="24" fill="#e3c75c"/><circle cx="-10" cy="40" r="10" fill="#8a6d1f"/></g>`;
 function fly(x, y, t, i, suitcase = false, tears = false) {
   const fl = Math.sin(t * 90 + i) > 0 ? 18 : 10;
   let s = `<g transform="translate(${x},${y})">`;
