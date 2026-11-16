@@ -170,8 +170,8 @@ const SCENES = Object.assign({}, INTRO_SCENES, {
       let s = `<rect width="1080" height="1920" fill="${OUT}"/>`;
       for (let i = 0; i < 30; i++) s += `<circle cx="${(i * 197) % 1080}" cy="${(i * 331 + lt * 200) % 1920}" r="${30 + (i % 5) * 20}" fill="#fff" opacity=".07"/>`;
       const k = back(seg(lt, 0.05, 0.35));
-      s += `<g transform="translate(540,800) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="150" fill="#ffd23f">40 MIN</text><text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="110" fill="#fff">DESPUÉS…</text></g>`;
-      s += `<g transform="translate(540,1160)"><circle r="80" fill="#fff" ${st(8)}/><path d="M0,0 L0,-55 M0,0 L${45 * Math.cos(lt * 12)},${45 * Math.sin(lt * 12)}" ${st(8)}/></g>`;
+      s += `<g transform="translate(540,620) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="150" fill="#ffd23f">40 MIN</text><text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="110" fill="#fff">DESPUÉS…</text></g>`;
+      s += `<g transform="translate(540,1520)"><circle r="80" fill="#fff" ${st(8)}/><path d="M0,0 L0,-55 M0,0 L${45 * Math.cos(lt * 12)},${45 * Math.sin(lt * 12)}" ${st(8)}/></g>`;
       return s;
     }
     const k = lt - tw;
@@ -230,7 +230,7 @@ const SCENE_OF = ['I0', 'I1', 'I2', 'I3', 'V', 'H', 'G', 'W', 'C', 'C', 'C', 'D'
 EP.hud = function (t) {
   const L = TL.lines, tu = wordTime(3, 'uno'), tc = wordTime(14, 'tapa') + 0.3;
   const up = easeOut(seg(t, tc, tc + 0.8));
-  const extra = t > tc && t < tc + 1.6 ? `<g transform="translate(260,${330 - 60 * seg(t, tc, tc + 1.6)})" opacity="${1 - seg(t, tc + 1.1, tc + 1.6)}"><text font-family="Lilita" font-size="80" fill="#46d17f" stroke="${OUT}" stroke-width="12" paint-order="stroke">+4%</text></g>` : '';
+  const extra = t > tc && t < tc + 1.0 ? `<g transform="translate(270,${440 - 60 * seg(t, tc, tc + 1.0)})" opacity="${1 - seg(t, tc + 0.6, tc + 1.0)}"><text font-family="Lilita" font-size="80" fill="#46d17f" stroke="${OUT}" stroke-width="12" paint-order="stroke">+4%</text></g>` : '';
   return {
     show: t < L[4].start - 0.1 ? seg(t, L[3].start, L[3].start + 0.35) : seg(t, L[5].start - 0.08, L[5].start + 0.25), // oculto durante la votación
     days: t < tu ? 30 : 29,
