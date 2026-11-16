@@ -48,7 +48,28 @@ function renderH(t) {
     <text x="0" y="24" text-anchor="middle" font-family="Lilita" font-size="60" fill="#fff">¡SÍGUEME Y NO TE LO PIERDAS!</text></g>`;
   document.getElementById('s').innerHTML = s + `<rect width="1080" height="1920" fill="#000" opacity="${seg(t, 5.6, 6)}"/>`;
 }
-window.render = renderH;
-renderH(0);
+// versión foto para el feed de Instagram (4:5, 1080×1350): horario.html?post
+function renderPost() {
+  const svg = document.getElementById('s');
+  svg.setAttribute('viewBox', '0 0 1080 1350'); svg.setAttribute('height', '1350');
+  let s = burst(540, 640, 0.4, '#ff7a2f', '#ffa94d');
+  s += place(hugo({ t: 1.2, g: 0, mood: 'normal', mouth: 'open', look: -0.6, lookY: -1, armR: -150 }), 880, 1880, 0.78);
+  s += `<g transform="translate(540,120) rotate(-2)"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="84" fill="#ffd23f" stroke="${OUT}" stroke-width="18" paint-order="stroke" stroke-linejoin="round">CAPÍTULO NUEVO</text>
+    <text x="0" y="92" text-anchor="middle" font-family="Lilita" font-size="96" fill="#fff" stroke="${OUT}" stroke-width="18" paint-order="stroke" stroke-linejoin="round">CADA DÍA</text></g>`;
+  s += `<rect x="70" y="250" width="940" height="745" rx="40" fill="#fff" ${st(9)}/>`;
+  ROWS.forEach(([flags, name, hour], i) => {
+    const y = 325 + i * 140, es = i === 0;
+    if (es) s += `<rect x="90" y="${y - 55}" width="900" height="140" rx="28" fill="#ffe8cc"/>`;
+    if (i > 0) s += `<path d="M120,${y - 52} H960" stroke="#e9ecef" stroke-width="4"/>`;
+    s += `<text x="120" y="${y + 14}" font-size="56">${flags}</text>`;
+    s += `<text x="120" y="${y + 66}" font-family="Fredoka" font-size="${name.length > 20 ? 29 : 34}" fill="#495057">${name}</text>`;
+    s += `<text x="955" y="${y + 48}" text-anchor="end" font-family="Lilita" font-size="${es ? 104 : 90}" fill="${es ? '#ff2e48' : OUT}">${hour}</text>`;
+  });
+  s += `<g transform="translate(370,1150) rotate(-2)"><rect x="-300" y="-62" width="600" height="124" rx="32" fill="#ff2e48" ${st(9)}/>
+    <text x="0" y="22" text-anchor="middle" font-family="Lilita" font-size="62" fill="#fff">¡SÍGUEME!</text></g>`;
+  svg.innerHTML = s;
+}
+if (location.search.includes('post')) { window.render = renderPost; renderPost(); }
+else { window.render = renderH; renderH(0); }
 </script>
 </body></html>
