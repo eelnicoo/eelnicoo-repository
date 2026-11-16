@@ -3,7 +3,7 @@ const EP = {
   num: 2, day: 1, daysLeft: 29, glow: 0,
   coverHugo: { sucio: 0, mouth: 'smile' }, coverLine1: 'LA PRIMERA', coverLine2: 'DUCHA EN UNA SEMANA',
   // resultado de la votación del capítulo anterior (se actualiza con los datos reales)
-  vote: { a: 'DUCHA', pa: 100, b: 'GYM', pb: 0 },
+  vote: { a: 'DUCHA', pa: 86, b: 'GYM', pb: 14 },
 };
 
 const LINES = [
