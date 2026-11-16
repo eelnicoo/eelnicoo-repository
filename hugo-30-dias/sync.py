@@ -15,6 +15,9 @@ audio = sys.argv[2] if len(sys.argv) > 2 else os.path.join(here, 'audio', f'voz-
 scene = open(os.path.join(here, f'ep{EPN}.js'), encoding='utf-8').read()
 block = scene[scene.index('const LINES'):scene.index('];', scene.index('const LINES'))]
 texts = re.findall(r"text: '([^']*)'", block)
+if '...introLines()' in block:  # arranque común de lib.js
+    day = re.search(r"dayWord: '([^']*)'", scene).group(1)
+    texts = ['Hugo: cero duchas.', 'Quiere conquistar a Laura.', 'Tú eliges cada cambio.', f'Día {day}.'] + texts
 N = len(texts)
 
 dur = float(subprocess.check_output(

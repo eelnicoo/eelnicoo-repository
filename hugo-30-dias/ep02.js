@@ -1,14 +1,15 @@
 // Capítulo 2 — Día 1: la primera ducha. Votación siguiente: GYM vs DENTISTA.
 const EP = {
-  num: 2, day: 1, daysLeft: 29, glow: 0,
+  num: 2, day: 1, dayWord: 'uno', daysLeft: 29, glow: 0, start: { g: 0, sucio: 1 },
   coverHugo: { sucio: 0, mouth: 'smile' }, coverLine1: 'LA PRIMERA', coverLine2: 'DUCHA EN UNA SEMANA',
   // resultado de la votación del capítulo anterior (se actualiza con los datos reales)
   vote: { a: 'DUCHA', pa: 86, b: 'GYM', pb: 14 },
 };
 
 const LINES = [
+  ...introLines(),
   { text: 'Habéis votado… y ganó la ducha.', hl: ['ducha'] },
-  { text: 'Día uno: primera ducha en una semana.', hl: ['día', 'uno'] },
+  { text: 'Primera ducha en una semana.', hl: ['primera', 'ducha'] },
   { text: 'Problema: no le queda gel, y tiene un euro con veinte.', hl: ['problema', 'euro', 'veinte'], red: ['problema'] },
   { text: 'Así que se lava con lavavajillas.', hl: ['lavavajillas'] },
   { text: 'Y encima, no hay agua caliente.', hl: ['agua', 'caliente'], red: ['no'] },
@@ -71,12 +72,12 @@ function fly(x, y, t, i, suitcase = false, tears = false) {
 }
 
 // ---------- escenas ----------
-const SCENES = {
+const SCENES = Object.assign({}, INTRO_SCENES, {
   // «Habéis votado… y ganó la ducha.» — resultado de la votación
   V(lt, t) {
     let s = burst(540, 820, t, '#1d1630', '#2a2350');
     const v = EP.vote, fill = easeOut(seg(lt, 0.35, 1.2));
-    const tw = wordTime(0, 'ganó') - TL.lines[0].start + 0.08;
+    const tw = wordTime(4, 'ganó') - TL.lines[4].start + 0.08;
     const win = easeOut(seg(lt, tw, tw + 0.35));
     const k1 = back(seg(lt, 0.05, 0.35)), k2 = back(seg(lt, 0.15, 0.45));
     const aWins = v.pa >= v.pb;
@@ -97,14 +98,12 @@ const SCENES = {
   H(lt, t) {
     let s = bathroom(t);
     s += place(hugo({ t, sucio: 1, mood: 'sad', mouth: 'o', look: 1, blink: blinkAt(t) }), 470, 1900 + Math.sin(t * 3) * 5, 1.05);
-    const k = back(seg(lt, 0.05, 0.35));
-    s += `<g transform="translate(540,470) rotate(-4) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="200" fill="#ffd23f" stroke="${OUT}" stroke-width="26" paint-order="stroke" stroke-linejoin="round">DÍA 1</text></g>`;
     return s;
   },
   // «Problema: no le queda gel, y tiene un euro con veinte.»
   G(lt, t) {
     let s = bathroom(t, 0.35);
-    const tw = wordTime(2, 'tiene') - TL.lines[2].start;
+    const tw = wordTime(6, 'tiene') - TL.lines[6].start;
     if (lt < tw) {
       const sq = Math.max(0, Math.sin(seg(lt, 0.3, tw) * Math.PI * 3));
       s += `<g transform="translate(540,900) rotate(180) scale(${1 + 0.25 * sq},${1 - 0.3 * sq})">
@@ -145,7 +144,7 @@ const SCENES = {
   },
   // «Y encima, no hay agua caliente.» / «Hugo grita como un niño.» / «Pero aguanta.»
   C(lt, t) {
-    const L = TL.lines, scream = t >= L[5].start - 0.05 && t < L[6].start - 0.05, hold = t >= L[6].start - 0.05;
+    const L = TL.lines, scream = t >= L[9].start - 0.05 && t < L[10].start - 0.05, hold = t >= L[10].start - 0.05;
     let s = bathroom(t) + `<rect width="1080" height="1920" fill="#4dabf7" opacity=".22"/>`;
     s += showerWater(t, 1, true);
     const jit = hold ? Math.sin(t * 60) * 6 : scream ? Math.sin(t * 45) * 14 : 0;
@@ -154,11 +153,11 @@ const SCENES = {
     for (let i = 0; i < 7; i++) s += `<path d="M${408 + i * 40 + jit},${872} l12,${40 + (i % 3) * 22} l12,${-40 - (i % 3) * 22} Z" fill="#e7f5ff" ${st(4)}/>`;
     for (let i = 0; i < 14; i++) { const x = (i * 157 + t * 40) % 1080, y = (i * 241 + t * 160) % 1400; s += `<text x="${x}" y="${y}" font-size="46" fill="#fff" opacity=".8">❄</text>`; }
     if (scream) {
-      const k = back(seg(t, L[5].start, L[5].start + 0.3));
+      const k = back(seg(t, L[9].start, L[9].start + 0.3));
       s += `<g transform="translate(540,470) rotate(${Math.sin(t * 30) * 4}) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="190" fill="#fff" stroke="${OUT}" stroke-width="22" paint-order="stroke">¡AAAAH!</text></g>`;
     }
     if (hold) {
-      const k = back(seg(t, L[6].start + 0.1, L[6].start + 0.4));
+      const k = back(seg(t, L[10].start + 0.1, L[10].start + 0.4));
       s += `<g transform="translate(840,700) scale(${k})"><circle r="90" fill="#ffd23f" ${st(8)}/><text x="0" y="34" text-anchor="middle" font-size="100">👍</text></g>`;
     }
     s += `<path d="M0,1350 Q540,1320 1080,1350 V1920 H0 Z" fill="#ff8fab" ${st()}/><path d="M150,1360 V1920 M330,1350 V1920 M520,1345 V1920 M720,1350 V1920 M910,1355 V1920" stroke="#e86f8f" stroke-width="8"/>`;
@@ -166,7 +165,7 @@ const SCENES = {
   },
   // «Cuarenta minutos después… el desagüe se rinde.»
   D(lt, t) {
-    const tw = wordTime(7, 'el') - TL.lines[7].start;
+    const tw = wordTime(11, 'el') - TL.lines[11].start;
     if (lt < tw) {
       let s = `<rect width="1080" height="1920" fill="${OUT}"/>`;
       for (let i = 0; i < 30; i++) s += `<circle cx="${(i * 197) % 1080}" cy="${(i * 331 + lt * 200) % 1920}" r="${30 + (i % 5) * 20}" fill="#fff" opacity=".07"/>`;
@@ -201,9 +200,9 @@ const SCENES = {
   },
   // «En la oficina, Laura pasa a su lado.» / «Y por primera vez… no se tapa la nariz.»
   O(lt, t) {
-    const L = TL.lines, tc = wordTime(10, 'tapa');
+    const L = TL.lines, tc = wordTime(14, 'tapa');
     let s = classroom(t);
-    const walk = easeInOut(seg(t, L[9].start, L[10].start + 0.3));
+    const walk = easeInOut(seg(t, L[13].start, L[14].start + 0.3));
     s += place(hugo({ t, sucio: 0, mood: t > tc + 0.3 ? 'dream' : 'normal', mouth: t > tc + 0.3 ? 'smile' : 'o', look: 1, blink: blinkAt(t, 1.2) }), 280, 1700, 0.8);
     s += desk(280, 1490, 400);
     s += place(laura({ t, look: -1, blink: blinkAt(t, 0.4), mouth: 'smile' }), lerp(1250, 720, walk), 1720 + Math.abs(Math.sin(t * 9)) * -14 * (walk < 1 ? 1 : 0), 0.8);
@@ -215,7 +214,7 @@ const SCENES = {
   P(lt, t) {
     let s = classroom(t) + `<rect width="1080" height="1920" fill="${OUT}" opacity=".45"/>`;
     s += place(hugo({ t, sucio: 0, mood: 'normal', mouth: 'o', look: Math.sin(t * 1.6), lookY: -1, blink: blinkAt(t, 1.4), armR: -150 + Math.sin(t * 3) * 4 }), 540, 2060 + Math.sin(t * 3) * 5, 1.15);
-    const tA = wordTime(11, 'gym'), tB = wordTime(11, 'dentista');
+    const tA = wordTime(15, 'gym'), tB = wordTime(15, 'dentista');
     const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
     const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
     s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tA)), '#ff8a2a', 'GYM', DUMBBELL, '¿MAÑANA?');
@@ -224,16 +223,16 @@ const SCENES = {
     s += `<text x="540" y="650" text-anchor="middle" font-family="Lilita" font-size="${130 * kv}" fill="#ffd23f" ${st(12)} paint-order="stroke">VS</text>`;
     return s;
   },
-};
-const SCENE_OF = ['V', 'H', 'G', 'W', 'C', 'C', 'C', 'D', 'M', 'O', 'O', 'P', 'P'];
+});
+const SCENE_OF = ['I0', 'I1', 'I2', 'I3', 'V', 'H', 'G', 'W', 'C', 'C', 'C', 'D', 'M', 'O', 'O', 'P', 'P'];
 
 // marcador: visible desde «Día uno»; los días pasan de 30 a 29; al no taparse la nariz, GLOW 0→4 % y barra 5→8 %
 EP.hud = function (t) {
-  const L = TL.lines, tu = wordTime(1, 'uno'), tc = wordTime(10, 'tapa') + 0.3;
+  const L = TL.lines, tu = wordTime(3, 'uno'), tc = wordTime(14, 'tapa') + 0.3;
   const up = easeOut(seg(t, tc, tc + 0.8));
   const extra = t > tc && t < tc + 1.6 ? `<g transform="translate(260,${330 - 60 * seg(t, tc, tc + 1.6)})" opacity="${1 - seg(t, tc + 1.1, tc + 1.6)}"><text font-family="Lilita" font-size="80" fill="#46d17f" stroke="${OUT}" stroke-width="12" paint-order="stroke">+4%</text></g>` : '';
   return {
-    show: seg(t, L[1].start, L[1].start + 0.35),
+    show: t < L[4].start - 0.1 ? seg(t, L[3].start, L[3].start + 0.35) : seg(t, L[5].start - 0.08, L[5].start + 0.25), // oculto durante la votación
     days: t < tu ? 30 : 29,
     dayPulse: Math.max(0, Math.sin(seg(t, tu, tu + 0.4) * Math.PI)),
     glow: lerp(0, 4, up), glowPulse: Math.max(0, Math.sin(seg(t, tc, tc + 0.5) * Math.PI)),
@@ -242,7 +241,7 @@ EP.hud = function (t) {
 };
 EP.shake = (sc, lt, t) => {
   const L = TL.lines;
-  if (sc === 'C' && t >= L[5].start - 0.05 && t < L[5].start + 0.5) return 16 * (1 - seg(t, L[5].start, L[5].start + 0.5));
+  if (sc === 'C' && t >= L[9].start - 0.05 && t < L[9].start + 0.5) return 16 * (1 - seg(t, L[9].start, L[9].start + 0.5));
   return 0;
 };
 
@@ -250,47 +249,48 @@ EP.shake = (sc, lt, t) => {
 window.sfxCues = function () {
   const L = TL.lines, c = [];
   const add = (t, f, v, d) => c.push({ t: Math.max(0, t), f, v, d });
+  introCues(add);
   const s0 = (i) => L[SCENE_OF.indexOf(SCENE_OF[i])].start - 0.08;
   // votación
-  add(0.05, 'pop', 0.5); add(0.15, 'pop', 0.5);
-  for (let i = 0; i < 8; i++) add(0.35 + i * 0.1, 'tick', 0.35);
-  add(wordTime(0, 'ganó') + 0.33, 'stamp', 0.75);
-  add(wordTime(0, 'ganó') + 0.4, 'sparkle', 0.4);
-  // día 1
-  add(L[1].start - 0.08, 'whoosh', 0.5);
-  add(wordTime(1, 'uno'), 'ding', 0.35);
-  add(L[1].start, 'buzz', 0.2, L[2].end);
+  const v0 = L[4].start - 0.08;
+  add(v0 + 0.05, 'pop', 0.5); add(v0 + 0.15, 'pop', 0.5);
+  for (let i = 0; i < 8; i++) add(v0 + 0.35 + i * 0.1, 'tick', 0.35);
+  add(wordTime(4, 'ganó') + 0.33, 'stamp', 0.75);
+  add(wordTime(4, 'ganó') + 0.4, 'sparkle', 0.4);
+  // ducha
+  add(L[5].start - 0.08, 'whoosh', 0.5);
+  add(L[5].start, 'buzz', 0.2, L[6].end);
   // gel vacío y cartera
-  add(s0(2) + 0.35, 'pfff', 0.6);
-  add(wordTime(2, 'tiene'), 'pop', 0.5);
-  add(wordTime(2, 'tiene') + 0.35, 'buzz', 0.12, wordTime(2, 'tiene') + 1.3);
-  add(wordTime(2, 'euro') + 0.1, 'fail', 0.25);
+  add(s0(6) + 0.35, 'pfff', 0.6);
+  add(wordTime(6, 'tiene'), 'pop', 0.5);
+  add(wordTime(6, 'tiene') + 0.35, 'buzz', 0.12, wordTime(6, 'tiene') + 1.3);
+  add(wordTime(6, 'euro') + 0.1, 'fail', 0.25);
   // lavavajillas
-  add(L[3].start - 0.08, 'water', 0.3, L[7].start - 0.1);
-  add(L[3].start + 0.2, 'sparkle', 0.45);
-  for (let i = 0; i < 5; i++) add(L[3].start + 0.3 + i * 0.22, 'pop', 0.35);
+  add(L[7].start - 0.08, 'water', 0.3, L[11].start - 0.1);
+  add(L[7].start + 0.2, 'sparkle', 0.45);
+  for (let i = 0; i < 5; i++) add(L[7].start + 0.3 + i * 0.22, 'pop', 0.35);
   // agua fría, grito y aguante
-  add(L[4].start, 'impact', 0.45);
-  add(L[5].start - 0.05, 'boing', 0.5);
-  add(L[6].start, 'chatter', 0.55);
-  add(L[6].start + 0.1, 'ding', 0.3);
+  add(L[8].start, 'impact', 0.45);
+  add(L[9].start - 0.05, 'boing', 0.5);
+  add(L[10].start, 'chatter', 0.55);
+  add(L[10].start + 0.1, 'ding', 0.3);
   // desagüe
-  add(L[7].start - 0.08, 'tick', 0.4); add(L[7].start + 0.2, 'tick', 0.4); add(L[7].start + 0.45, 'tick', 0.4);
-  add(wordTime(7, 'el'), 'glug', 0.6);
-  add(wordTime(7, 'el') + 0.6, 'fail', 0.28);
+  add(L[11].start - 0.08, 'tick', 0.4); add(L[11].start + 0.2, 'tick', 0.4); add(L[11].start + 0.45, 'tick', 0.4);
+  add(wordTime(11, 'el'), 'glug', 0.6);
+  add(wordTime(11, 'el') + 0.6, 'fail', 0.28);
   // moscas que se van
-  add(L[8].start - 0.08, 'buzz', 0.25, L[8].end + 0.3);
-  add(L[8].start + 0.2, 'whoosh', 0.4);
-  add(L[8].start, 'sparkle', 0.35);
+  add(L[12].start - 0.08, 'buzz', 0.25, L[12].end + 0.3);
+  add(L[12].start + 0.2, 'whoosh', 0.4);
+  add(L[12].start, 'sparkle', 0.35);
   // oficina
-  add(L[9].start - 0.08, 'whoosh', 0.35);
-  add(wordTime(10, 'tapa') + 0.1, 'ding', 0.45);
-  add(wordTime(10, 'tapa') + 0.3, 'magic', 0.45);
+  add(L[13].start - 0.08, 'whoosh', 0.35);
+  add(wordTime(14, 'tapa') + 0.1, 'ding', 0.45);
+  add(wordTime(14, 'tapa') + 0.3, 'magic', 0.45);
   // votación nueva
-  add(L[11].start + 0.12, 'pop', 0.5); add(L[11].start + 0.28, 'pop', 0.5);
-  add(L[11].start + 0.42, 'impact', 0.25);
-  add(wordTime(11, 'gym'), 'boing', 0.35);
-  add(wordTime(11, 'dentista'), 'ding', 0.3);
+  add(L[15].start + 0.12, 'pop', 0.5); add(L[15].start + 0.28, 'pop', 0.5);
+  add(L[15].start + 0.42, 'impact', 0.25);
+  add(wordTime(15, 'gym'), 'boing', 0.35);
+  add(wordTime(15, 'dentista'), 'ding', 0.3);
   add(TL.total - 0.9, 'whoosh', 0.3);
   return c;
 };

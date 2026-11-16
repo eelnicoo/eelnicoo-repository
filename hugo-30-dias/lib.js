@@ -436,3 +436,76 @@ function start() {
   window.render = render;
   render(0);
 }
+
+// ---------- arranque común de cada capítulo (desde el 2) ----------
+// «Hugo: cero duchas. Quiere conquistar a Laura. Tú eliges cada cambio. Día N.»
+// EP.dayWord: el día en letra («uno», «dos»…). EP.start: cómo está Hugo al empezar el día ({ g, sucio }).
+function introLines() {
+  return [
+    { text: 'Hugo: cero duchas.', hl: ['cero', 'duchas'], red: ['cero'] },
+    { text: 'Quiere conquistar a Laura.', hl: ['laura'] },
+    { text: 'Tú eliges cada cambio.', hl: ['tú', 'eliges'] },
+    { text: `Día ${EP.dayWord}.`, hl: ['día', norm(EP.dayWord)] },
+  ];
+}
+const INTRO_SCENES = {
+  I0(lt, t) {
+    let s = classroom(t);
+    s += place(hugo({ t, g: 0, sucio: 1, mood: 'normal', mouth: 'chew', blink: blinkAt(t) }), 540, 2240 + Math.sin(t * 3) * 5, 1.6);
+    s += desk(540, 1640, 820);
+    const tw = wordTime(0, 'cero') - TL.lines[0].start, k = seg(lt, tw, tw + 0.2);
+    if (k > 0) s += `<g transform="translate(540,470) rotate(-8) scale(${lerp(2.6, 1, easeOut(k))})" opacity="${k}">
+      <rect x="-300" y="-90" width="600" height="180" rx="22" fill="#fff4e0" stroke="#ff2e48" stroke-width="16"/>
+      <text x="0" y="42" text-anchor="middle" font-family="Lilita" font-size="120" fill="#ff2e48">0 DUCHAS</text></g>`;
+    return s;
+  },
+  I1(lt, t) {
+    let s = classroom(t);
+    s += place(laura({ look: -0.3, blink: blinkAt(t, 1.1), mouth: 'smile' }), lerp(1250, 790, easeOut(seg(lt, 0, 0.35))), 1640 + Math.sin(t * 2.6) * 4, 0.82);
+    s += place(hugo({ t, g: 0, sucio: 1, mood: 'dream', mouth: 'open', look: 1 }), 300, 1640 + Math.sin(t * 3) * 6, 0.82, Math.sin(t * 2) * 2);
+    s += desk(300, 1450, 400) + desk(790, 1450, 380);
+    for (let i = 0; i < 6; i++) {
+      const k = ((lt * 0.8 + i / 6) % 1);
+      s += heart(lerp(350, 760, k) + Math.sin(k * 9 + i) * 30, lerp(900, 560, k) - Math.sin(k * Math.PI) * 120, 0.5 + 0.4 * Math.sin(k * Math.PI), '#ff3b5c', clamp(Math.sin(k * Math.PI) * 1.5));
+    }
+    return s;
+  },
+  I2(lt, t) {
+    let s = burst(540, 900, t, '#3b5bdb', '#4c6ef5');
+    const msgs = [['DUCHA 🚿', 260, 420, -6], ['¡GYM YA! 💪', 760, 640, 5], ['DENTISTA 🦷', 300, 880, 4], ['¡VAMOS HUGO!', 740, 1460, -5], ['DUCHA Y LUEGO GYM', 460, 1680, -3]];
+    msgs.forEach(([txt, x, y, r], i) => {
+      const k = back(seg(lt, 0.05 + i * 0.12, 0.35 + i * 0.12));
+      if (k <= 0) return;
+      const w = 60 + txt.length * 30;
+      s += `<g transform="translate(${x},${y + Math.sin(t * 3 + i) * 8}) rotate(${r}) scale(${k})">
+        <rect x="${-w / 2}" y="-60" width="${w}" height="120" rx="40" fill="#fff" ${st(8)}/>
+        <path d="M${-w / 2 + 40},55 l-20,40 l50,-40" fill="#fff" ${st(8)}/><rect x="${-w / 2 + 30}" y="44" width="70" height="16" fill="#fff"/>
+        <circle cx="${-w / 2 + 50}" cy="0" r="30" fill="#ffd23f" ${st(5)}/>
+        <text x="${-w / 2 + 95}" y="16" font-family="Lilita" font-size="46" fill="${OUT}">${txt}</text></g>`;
+    });
+    return s;
+  },
+  I3(lt, t) {
+    let s = classroom(t);
+    const L = TL.lines, mid = (L[3].end - L[3].start) * 0.35 + 0.08;
+    const after = lt > mid, st0 = EP.start || {};
+    s += place(hugo(after ? { t, g: st0.g ?? EP.glow, sucio: st0.sucio, mood: 'normal', mouth: 'smile', blink: blinkAt(t) } : { t, g: 0, sucio: 1, mood: 'normal', mouth: 'o' }), 540, 2060 + Math.sin(t * 3) * 5, 1.2);
+    const fl = 1 - Math.abs(lt - mid) / 0.18;
+    if (fl > 0) s += `<rect width="1080" height="1920" fill="#fff" opacity="${clamp(fl)}"/>`;
+    if (after) for (let i = 0; i < 6; i++) { const a = (t * 2 + i * 1.1) % 2, sc = Math.sin(clamp(a / 2) * Math.PI); s += `<path d="M0,-40 Q6,-6 40,0 Q6,6 0,40 Q-6,6 -40,0 Q-6,-6 0,-40 Z" transform="translate(${[220, 860, 180, 900, 300, 780][i]},${[700, 640, 1100, 1060, 520, 480][i]}) scale(${sc * 1.3})" fill="#ffe14d" ${st(5)}/>`; }
+    const k = back(seg(lt, 0.05, 0.35));
+    s += `<g transform="translate(540,470) rotate(-4) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="220" fill="#ffd23f" stroke="${OUT}" stroke-width="28" paint-order="stroke" stroke-linejoin="round">DÍA ${EP.day}</text></g>`;
+    return s;
+  },
+};
+function introCues(add) {
+  const L = TL.lines;
+  add(0.05, 'buzz', 0.2, L[1].start);
+  add(wordTime(0, 'cero') + 0.05, 'stamp', 0.7);
+  add(L[1].start - 0.08, 'whoosh', 0.45);
+  add(L[1].start + 0.2, 'sparkle', 0.35);
+  for (let i = 0; i < 5; i++) add(L[2].start - 0.08 + 0.1 + i * 0.12, 'pop', 0.45);
+  add(L[3].start - 0.08, 'whoosh', 0.4);
+  add(L[3].start - 0.08 + (L[3].end - L[3].start) * 0.35 + 0.08, 'magic', 0.5);
+  add(wordTime(3, norm(EP.dayWord)), 'ding', 0.35);
+}
