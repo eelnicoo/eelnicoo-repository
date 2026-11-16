@@ -1,17 +1,18 @@
 """Saca de la voz (MP3 de ElevenLabs) cuándo empieza y acaba cada frase del guion
-y lo guarda en timings.json, que usa render.js para cuadrar escenas y subtítulos.
+y lo guarda en timings-NN.json, que usa render.js para cuadrar escenas y subtítulos.
 
 Detecta los tramos con voz (entre silencios) y los reparte entre las frases del
 guion de scene.js de forma que la duración de cada frase encaje con su longitud.
 Las pausas dentro de una frase se guardan como «partes» para cuadrar las palabras.
 
-Uso: python3 sync.py voz.mp3
+Uso: python3 sync.py 2 [voz.mp3]   (por defecto, audio/voz-capitulo-02.mp3)
 """
 import json, os, re, subprocess, sys
 
 here = os.path.dirname(os.path.abspath(__file__))
-audio = sys.argv[1]
-scene = open(os.path.join(here, 'scene.js'), encoding='utf-8').read()
+EPN = sys.argv[1].zfill(2)
+audio = sys.argv[2] if len(sys.argv) > 2 else os.path.join(here, 'audio', f'voz-capitulo-{EPN}.mp3')
+scene = open(os.path.join(here, f'ep{EPN}.js'), encoding='utf-8').read()
 block = scene[scene.index('const LINES'):scene.index('];', scene.index('const LINES'))]
 texts = re.findall(r"text: '([^']*)'", block)
 N = len(texts)
@@ -62,6 +63,6 @@ groups.reverse()
 
 lines = [[round(g[0][0], 3), round(g[-1][1], 3), [[round(a, 3), round(b, 3)] for a, b in g]] for g in groups]
 json.dump({'lines': lines, 'total': round(dur + 1.0, 3)},
-          open(os.path.join(here, 'timings.json'), 'w'), indent=1)
+          open(os.path.join(here, f'timings-{EPN}.json'), 'w'), indent=1)
 for t, (a, b, p) in zip(texts, lines):
     print(f'{a:6.2f} -> {b:6.2f}  ({len(p)} parte/s)  {t}')

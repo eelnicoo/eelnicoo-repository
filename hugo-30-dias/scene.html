@@ -26,6 +26,11 @@ svg { position: absolute; inset: 0; }
   <svg id="s" viewBox="0 0 1080 1920" width="1080" height="1920" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="cap"></div>
 </div>
-<script src="scene.js"></script>
+<script src="lib.js"></script>
+<script>
+  // capítulo: scene.html?ep=02 (por defecto, el 01)
+  const ep = (new URLSearchParams(location.search).get('ep') || '01').padStart(2, '0');
+  document.write(`<script src="ep${ep}.js"><\/script>`);
+</script>
 </body>
 </html>

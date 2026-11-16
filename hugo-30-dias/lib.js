@@ -1,6 +1,7 @@
-// Hugo · 30 días — Capítulo 1
-// render(t) dibuja el fotograma del segundo t. Todo es SVG generado por código.
+// Hugo · 30 días — motor común: personajes, decorados, marcador, subtítulos y render.
+// Cada capítulo (epNN.js) define EP, LINES, SCENES, SCENE_OF y sfxCues, y llama a start().
 
+// ---------- utilidades ----------
 // ---------- utilidades ----------
 const OUT = '#1d1630';
 const st = (w = 7) => `stroke="${OUT}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
@@ -14,27 +15,13 @@ const HEART = 'M0,30 C-60,-15 -50,-75 0,-42 C50,-75 60,-15 0,30 Z';
 const heart = (x, y, s, fill = '#ff4d6d', op = 1, rot = 0) =>
   `<path d="${HEART}" transform="translate(${x},${y}) rotate(${rot}) scale(${s})" fill="${fill}" opacity="${op}" ${st(7 / Math.max(s, 0.01))}/>`;
 const blinkAt = (t, off = 0) => ((t + off) % 3.3) < 0.12;
+const norm = w => w.toLowerCase().replace(/[¿?¡!.,:;…]/g, '');
 
-// ---------- guion ----------
-const LINES = [
-  { text: 'Este es Hugo.', hl: ['hugo'] },
-  { text: 'Veintiséis años. Cinco de becario.', hl: ['becario'] },
-  { text: 'Lleva una semana sin ducharse.', hl: ['sin', 'ducharse'] },
-  { text: 'Y dos años enamorado de Laura.', hl: ['laura'] },
-  { text: 'Laura no sabe ni cómo se llama.', hl: ['no', 'sabe'] },
-  { text: 'Porque Laura sale con Marcos.', hl: ['marcos'], red: ['marcos'] },
-  { text: 'Cena de empresa: en treinta días.', hl: ['treinta', 'días'] },
-  { text: 'Hugo tiene treinta días para cambiar.', hl: ['cambiar'] },
-  { text: '¿Por dónde empieza?', hl: ['empieza'] },
-  { text: 'Comenta: ducha o gym.', hl: ['ducha', 'gym'] },
-  { text: 'Sígueme para el día uno.', hl: ['día', 'uno'] },
-];
-// glow-up de Hugo en este capítulo (0 = día 0, 1 = transformado)
-const GLOW = 0;
-const norm = w => w.toLowerCase().replace(/[¿?¡!.,:;]/g, '');
-
-// tiempos: los de timings.json (audio real) o una estimación
-const TL = (() => {
+// ---------- tiempos ----------
+// los de timings-NN.json (audio real) o una estimación
+let TL;
+function buildTL() {
+  TL = (() => {
   const o = window.TL_OVERRIDE;
   let lines, total;
   if (o && o.lines && o.lines.length === LINES.length) {
@@ -62,7 +49,8 @@ const TL = (() => {
   });
   return { lines, total };
 })();
-window.TOTAL = TL.total;
+  window.TOTAL = TL.total;
+}
 const wordTime = (li, n) => { const w = TL.lines[li].words.find(x => x.n === n); return w ? w.t : 1e9; };
 
 // ---------- personajes ----------
@@ -99,16 +87,17 @@ function eyes(cx, cy, o) {
 
 function hugo(o = {}) {
   // g: glow-up de 0 (día 0) a 1 (transformado). w: ancho del cuerpo. d: dejadez. fat: gordura.
-  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = GLOW, t = 0, grime = true, look = 0, lookY = 0, blink = false } = o;
+  const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = EP.glow, t = 0, grime = true, look = 0, lookY = 0, blink = false } = o;
   const w = lerp(1.55, 1, g), d = clamp(1 - g * 2.2), fat = clamp(1 - g * 2);
+  const su = o.sucio ?? (EP.sucio ?? d); // suciedad: moscas, tufo, manchas, mocos, aliento
   const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', hood = '#3fae6a', hoodD = '#2b8a50', jeans = '#3b5a9a';
   const hair = '#a8552a', beardC = '#6b3f22';
   const lw = lerp(66, 88, fat), lx = lerp(12, 22, fat);
   let s = '';
   // tufo
-  if (grime && d > 0) for (let i = 0; i < 4; i++) {
+  if (grime && su > 0) for (let i = 0; i < 4; i++) {
     const k = ((t * 0.55 + i / 4) % 1), x = (i - 1.5) * 110 * w;
-    s += `<path d="M${x},${-600 - k * 520} q30,-40 0,-80 t0,-80 t0,-80" fill="none" stroke="#8cc63f" stroke-width="16" stroke-linecap="round" opacity="${Math.sin(k * Math.PI) * 0.75 * d}"/>`;
+    s += `<path d="M${x},${-600 - k * 520} q30,-40 0,-80 t0,-80 t0,-80" fill="none" stroke="#8cc63f" stroke-width="16" stroke-linecap="round" opacity="${Math.sin(k * Math.PI) * 0.75 * su}"/>`;
   }
   s += `<rect x="${-lx - lw}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
   s += `<rect x="${lx}" y="-400" width="${lw}" height="370" rx="22" fill="${jeans}" ${st()}/>`;
@@ -131,7 +120,7 @@ function hugo(o = {}) {
   s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
   s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
   s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
-  if (d > 0) s += `<g opacity="${d}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
+  if (su > 0) s += `<g opacity="${su}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
       <path d="M${55 * w},-520 q24,-16 40,4 q8,26 -18,28 q-30,0 -22,-32 Z" fill="#c0392b"/>
       <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/></g>`;
   s += `<rect x="-34" y="-725" width="68" height="75" fill="${skin}" ${st()}/>`;
@@ -194,9 +183,9 @@ function hugo(o = {}) {
   // nariz
   s += `<path d="M-14,-815 Q-34,-772 -2,-766 Q32,-768 16,-815" fill="${d > 0.5 ? '#f0a88a' : skin}" ${st(6)}/>`;
   // mocos
-  if (d > 0) {
+  if (su > 0) {
     const len = 24 + 16 * Math.sin(t * 2.2);
-    s += `<path d="M-14,-770 q-6,${len * 0.5} 0,${len} q9,8 13,-4 q0,${-len * 0.5} -3,${-len} Z" fill="#b5d96a" opacity="${d}" ${st(4)}/>`;
+    s += `<path d="M-14,-770 q-6,${len * 0.5} 0,${len} q9,8 13,-4 q0,${-len * 0.5} -3,${-len} Z" fill="#b5d96a" opacity="${su}" ${st(4)}/>`;
   }
   // boca
   if (mouth === 'smile') s += `<path d="M-42,-718 Q0,-694 42,-718" fill="none" ${st(8)}/>`;
@@ -208,16 +197,16 @@ function hugo(o = {}) {
   if (mouth === 'grit') s += `<rect x="-52" y="-738" width="104" height="36" rx="12" fill="#fff" ${st(7)}/><path d="M-52,-720 H52 M-18,-738 V-702 M18,-738 V-702" ${st(4)}/>`;
   if (mouth === 'chew') s += (Math.sin(t * 22) > 0 ? `<path d="M-44,-726 Q0,-684 44,-726 Z" fill="#7a1f2e" ${st(7)}/>` + teeth(-729) : `<path d="M-38,-716 Q0,-704 38,-716" fill="none" ${st(8)}/>`) + `<circle cx="-50" cy="-700" r="6" fill="#e8b923"/><circle cx="44" cy="-694" r="5" fill="#e8b923"/>`;
   // mal aliento
-  if (grime && d > 0 && ['open', 'chew', 'o', 'grit'].includes(mouth)) for (let i = 0; i < 3; i++) {
+  if (grime && su > 0 && ['open', 'chew', 'o', 'grit'].includes(mouth)) for (let i = 0; i < 3; i++) {
     const k = (t * 0.9 + i / 3) % 1;
-    s += `<circle cx="${50 + k * 170}" cy="${-712 - k * 90 + Math.sin(k * 8) * 12}" r="${16 + k * 26}" fill="#9ccc4a" opacity="${(1 - k) * 0.55 * d}"/>`;
+    s += `<circle cx="${50 + k * 170}" cy="${-712 - k * 90 + Math.sin(k * 8) * 12}" r="${16 + k * 26}" fill="#9ccc4a" opacity="${(1 - k) * 0.55 * su}"/>`;
   }
   // moscas
-  if (grime && d > 0) for (let i = 0; i < 3; i++) {
+  if (grime && su > 0) for (let i = 0; i < 3; i++) {
     const a = t * (3.2 + i * 0.7) + i * 2.1;
     const x = Math.cos(a) * 260 + Math.sin(a * 2.3) * 30, y = -880 + Math.sin(a * 1.3) * 140;
     const fl = Math.sin(t * 90 + i) > 0 ? 14 : 8;
-    s += `<g transform="translate(${x},${y})" opacity="${d}"><ellipse cx="-8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><ellipse cx="8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><circle r="10" fill="${OUT}"/></g>`;
+    s += `<g transform="translate(${x},${y})" opacity="${su}"><ellipse cx="-8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><ellipse cx="8" cy="-8" rx="10" ry="${fl}" fill="#fff" opacity=".8" ${st(3)}/><circle r="10" fill="${OUT}"/></g>`;
   }
   return s;
 }
@@ -346,7 +335,7 @@ const BROCCOLI = `<g transform="translate(0,-70)">
   <circle cx="-55" cy="-30" r="50" fill="#2f9e44" ${st(7)}/><circle cx="55" cy="-30" r="50" fill="#2f9e44" ${st(7)}/>
   <circle cx="0" cy="-75" r="58" fill="#37b24d" ${st(7)}/><circle cx="-20" cy="-90" r="10" fill="#8ce99a"/><circle cx="40" cy="-40" r="8" fill="#8ce99a"/></g>`;
 
-function hud(t, show, pct, dayPulse) {
+function hud(t, show, pct, dayPulse, glowPct = EP.glow * 100, days = EP.daysLeft, glowPulse = 0) {
   if (show <= 0) return '';
   const y = lerp(-240, 60, easeOut(show));
   const p = clamp(pct / 100);
@@ -354,9 +343,9 @@ function hud(t, show, pct, dayPulse) {
   return `<g transform="translate(0,${y})">
     <rect x="36" y="60" width="200" height="146" rx="28" fill="${OUT}" opacity=".93" stroke="#fff" stroke-opacity=".15" stroke-width="4"/>
     <text x="136" y="108" text-anchor="middle" font-family="Fredoka" font-size="32" fill="#ffd23f">DÍAS</text>
-    <text x="136" y="188" text-anchor="middle" font-family="Lilita" font-size="${80 * ds}" fill="#fff">30</text>
+    <text x="136" y="188" text-anchor="middle" font-family="Lilita" font-size="${80 * ds}" fill="#fff">${days}</text>
     <rect x="36" y="222" width="200" height="62" rx="20" fill="${OUT}" opacity=".93"/>
-    <text x="136" y="264" text-anchor="middle" font-family="Lilita" font-size="34" fill="#ff9f43">GLOW ${Math.round(GLOW * 100)}%</text>
+    <text x="136" y="264" text-anchor="middle" font-family="Lilita" font-size="34" fill="#ff9f43" transform="translate(136,252) scale(${1 + 0.25 * glowPulse}) translate(-136,-252)">GLOW ${Math.round(glowPct)}%</text>
     <rect x="256" y="60" width="788" height="146" rx="28" fill="${OUT}" opacity=".93" stroke="#fff" stroke-opacity=".15" stroke-width="4"/>
     <text x="292" y="110" font-family="Fredoka" font-size="34" fill="#46d17f">HUGO</text>
     <text x="1008" y="110" text-anchor="end" font-family="Fredoka" font-size="34" fill="#ff4d5e">MARCOS</text>
@@ -369,148 +358,7 @@ function hud(t, show, pct, dayPulse) {
   </g>`;
 }
 
-// ---------- escenas ----------
-const SCENES = {
-  // «Este es Hugo.»
-  A(lt, t) {
-    let s = classroom(t);
-    const bob = Math.sin(t * 3) * 5;
-    s += place(hugo({ t, mood: 'normal', mouth: 'chew', look: 0, blink: blinkAt(t) }), 540, 2240 + bob, 1.6);
-    s += desk(540, 1640, 820);
-    s += `<g transform="translate(330,1610) rotate(-12)"><path d="M0,0 L150,-40 L120,40 Z" fill="#ffcc5c" ${st(7)}/><path d="M0,0 L150,-40" stroke="#d4893a" stroke-width="22" stroke-linecap="round"/>
-      <circle cx="80" cy="-5" r="12" fill="#d9480f"/><circle cx="110" cy="10" r="10" fill="#d9480f"/></g>
-      <g transform="translate(760,1600)"><rect x="-70" y="-40" width="140" height="40" rx="6" fill="#e8d5b0" ${st(6)}/><path d="M-70,-40 L-50,-70 L90,-70 L70,-40" fill="#f3e3c3" ${st(6)}/></g>`;
-    return s;
-  },
-  // «Veintiséis años. Repitiendo primero por quinta vez.»
-  R(lt, t) {
-    let s = classroom(t);
-    s += place(hugo({ t, mood: 'normal', mouth: 'smile', look: -0.5, blink: blinkAt(t, 0.9) }), 540, 2240 + Math.sin(t * 3) * 5, 1.6);
-    s += desk(540, 1640, 820);
-    const k = back(seg(lt, 0.1, 0.4));
-    s += `<g transform="translate(540,520) rotate(5) scale(${k})">
-      <path d="M-60,-150 L-20,-300 M60,-150 L20,-300" stroke="#1c7ed6" stroke-width="16"/>
-      <rect x="-250" y="-150" width="500" height="300" rx="24" fill="#fff" ${st(9)}/>
-      <rect x="-250" y="-150" width="500" height="70" rx="24" fill="#1c7ed6"/><rect x="-250" y="-100" width="500" height="20" fill="#1c7ed6"/>
-      <text x="0" y="-100" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff">OFICINAS S.L.</text>
-      <rect x="-220" y="-55" width="130" height="160" rx="12" fill="#ffe0b8" ${st(5)}/><circle cx="-155" cy="0" r="38" fill="#a8552a"/><circle cx="-155" cy="10" r="30" fill="#efbd95"/>
-      <text x="80" y="20" text-anchor="middle" font-family="Lilita" font-size="64" fill="#e03131">BECARIO</text>
-      <text x="80" y="90" text-anchor="middle" font-family="Fredoka" font-size="38" fill="${OUT}" opacity="${seg(lt, 0.6, 0.9)}">DESDE 2021</text></g>`;
-    return s;
-  },
-  // «Lleva una semana sin ducharse.»
-  S(lt, t) {
-    let s = classroom(t) + `<rect width="1080" height="1920" fill="#8cc63f" opacity=".18"/>`;
-    s += place(hugo({ t: t * 1.6, mood: 'normal', mouth: 'smile', look: Math.sin(t * 4) * 0.5, blink: blinkAt(t, 0.5) }), 540, 2330 + Math.sin(t * 3) * 5, 1.75);
-    const k = back(seg(lt, 0.15, 0.45)), n = Math.min(7, 1 + Math.floor(seg(lt, 0.3, 1.1) * 7));
-    s += `<g transform="translate(540,440) rotate(-4) scale(${k})">
-      <rect x="-300" y="-120" width="600" height="230" rx="34" fill="#fff" ${st(9)}/>
-      <text x="0" y="-38" text-anchor="middle" font-family="Fredoka" font-size="46" fill="${OUT}">DÍAS SIN DUCHA</text>
-      <text x="0" y="78" text-anchor="middle" font-family="Lilita" font-size="120" fill="#5c940d">${n}</text></g>`;
-    return s;
-  },
-  // «Y tres años enamorado de Laura.»
-  B(lt, t) {
-    let s = classroom(t);
-    s += place(laura({ look: -0.2, blink: blinkAt(t, 1.1), mouth: 'smile' }), 790, 1640 + Math.sin(t * 2.6) * 4, 0.82);
-    s += place(hugo({ t, mood: 'dream', mouth: 'open', look: 1 }), 300, 1640 + Math.sin(t * 3) * 6, 0.82, Math.sin(t * 2) * 2);
-    s += desk(280, 1450, 380) + desk(790, 1450, 380);
-    for (let i = 0; i < 7; i++) {
-      const k = ((lt * 0.7 + i / 7) % 1);
-      const x = lerp(330, 760, k) + Math.sin(k * 9 + i) * 30, y = lerp(920, 560, k) - Math.sin(k * Math.PI) * 120;
-      s += heart(x, y, 0.5 + 0.4 * Math.sin(k * Math.PI), '#ff3b5c', clamp(Math.sin(k * Math.PI) * 1.5));
-    }
-    return s;
-  },
-  // «Laura no sabe ni cómo se llama.»
-  C(lt, t) {
-    let s = classroom(t);
-    s += place(laura({ look: 0.6, blink: blinkAt(t, 0.4), mouth: 'flat', brow: 'up' }), 540, 2228 + Math.sin(t * 2.4) * 4, 1.6, Math.sin(t * 1.5) * 1.5);
-    const k = back(seg(lt, 0.25, 0.55));
-    s += `<g transform="translate(540,430) scale(${k})">
-      <rect x="-380" y="-140" width="760" height="270" rx="60" fill="#fff" ${st(9)}/>
-      <path d="M-40,128 L10,210 L50,128" fill="#fff" ${st(9)}/><rect x="-45" y="110" width="100" height="25" fill="#fff"/>
-      <text x="0" y="-30" text-anchor="middle" font-family="Lilita" font-size="86" fill="${OUT}">¿HUGO?</text>
-      <text x="0" y="80" text-anchor="middle" font-family="Lilita" font-size="74" fill="#ff4d5e">¿QUIÉN ES HUGO?</text></g>`;
-    return s;
-  },
-  // «Porque Laura sale con Marcos.»
-  D(lt, t) {
-    let s = classroom(t);
-    const mx = lerp(1450, 830, easeOut(seg(lt, 0, 0.55)));
-    s += place(hugo({ t, mood: 'sad', mouth: 'sad', look: 1, blink: blinkAt(t, 2) }), 200, 1700, 0.62);
-    s += place(laura({ look: 1, blink: blinkAt(t, 0.7), mouth: 'smile' }), 560, 1690 + Math.sin(t * 2.6) * 4, 0.78);
-    s += place(marcos({ t }), mx, 1700, 0.86);
-    // corazón roto encima de Hugo
-    const br = easeOut(seg(lt, 0.7, 1.1));
-    s += `<g transform="translate(190,830)"><g transform="translate(${-br * 26},0) rotate(${-br * 18})"><path d="M0,30 C-60,-15 -50,-75 0,-42 L-12,-10 L8,6 Z" transform="scale(1.3)" fill="#ff3b5c" ${st(5)}/></g>
-       <g transform="translate(${br * 26},0) rotate(${br * 18})"><path d="M0,30 C60,-15 50,-75 0,-42 L-12,-10 L8,6 Z" transform="scale(1.3)" fill="#ff3b5c" ${st(5)}/></g></g>`;
-    for (let i = 0; i < 4; i++) { const k = ((lt * 0.8 + i / 4) % 1); s += heart(lerp(620, 780, k), lerp(900, 640, k), 0.35, '#ff6f9f', Math.sin(k * Math.PI)); }
-    return s;
-  },
-  // «Fiesta de fin de curso: en treinta días.»
-  E(lt, t) {
-    let s = `<rect width="1080" height="1920" fill="#dfe6ee"/>`;
-    s += `<rect x="70" y="250" width="940" height="900" rx="20" fill="#c8935a" ${st()}/>`;
-    for (let i = 0; i < 40; i++) s += `<circle cx="${100 + (i * 197) % 880}" cy="${280 + (i * 131) % 840}" r="4" fill="#a87440"/>`;
-    const sw = Math.sin(t * 2) * 1.5;
-    s += `<g transform="translate(540,690) rotate(${-4 + sw})">
-      <rect x="-330" y="-400" width="660" height="790" rx="14" fill="#7a1022" ${st(9)}/>
-      <circle cx="0" cy="-400" r="16" fill="#ff4d5e" ${st(6)}/>
-      <g transform="translate(0,-190)">
-        <path d="M0,-150 L110,40 L-110,40 Z M0,-90 L130,110 L-130,110 Z" fill="#2f9e44" ${st(7)}/><rect x="-22" y="110" width="44" height="40" fill="#8a5a32" ${st(6)}/>
-        <path d="M0,-185 l14,30 l32,4 l-24,22 l7,32 l-29,-16 l-29,16 l7,-32 l-24,-22 l32,-4 Z" fill="#ffd23f" ${st(5)}/>
-        ${[[-40, -30, '#ff4d6d'], [45, 10, '#4dabf7'], [-60, 80, '#ffd23f'], [55, 80, '#ff4d6d'], [0, 40, '#fff']].map(([x, y, c], i) => `<circle cx="${x}" cy="${y}" r="15" fill="${c}" opacity="${0.6 + 0.4 * Math.sin(t * 6 + i)}" ${st(4)}/>`).join('')}</g>
-      <text x="0" y="40" text-anchor="middle" font-family="Lilita" font-size="120" fill="#ffd23f" ${st(10)} paint-order="stroke">CENA DE</text>
-      <text x="0" y="140" text-anchor="middle" font-family="Lilita" font-size="110" fill="#fff">EMPRESA</text>
-      <text x="0" y="220" text-anchor="middle" font-family="Fredoka" font-size="42" fill="#ff8ab0">NAVIDAD · VIERNES · 21:00</text>
-      <text x="0" y="300" text-anchor="middle" font-family="Fredoka" font-size="36" fill="#fff" opacity=".7">¡TRAED PAREJA!</text></g>`;
-    const ws = wordTime(6, 'treinta') - TL.lines[6].start;
-    const k = seg(lt, ws, ws + 0.22);
-    if (k > 0) {
-      const sc = lerp(3, 1, easeOut(k));
-      s += `<g transform="translate(560,980) rotate(-9) scale(${sc})" opacity="${k}">
-        <rect x="-300" y="-85" width="600" height="170" rx="20" fill="#fff4e0" stroke="#ff2e48" stroke-width="16"/>
-        <text x="0" y="40" text-anchor="middle" font-family="Lilita" font-size="118" fill="#ff2e48">EN 30 DÍAS</text></g>`;
-    }
-    return s;
-  },
-  // «Hugo tiene treinta días para que Laura se fije en él.»
-  F(lt, t) {
-    let s = burst(540, 820, t, '#ff7a2f', '#ff9a45');
-    const up = easeOut(seg(lt, 0.15, 0.45));
-    const tc = wordTime(7, 'cambiar') - TL.lines[7].start, kc = easeOut(seg(lt, tc - 0.1, tc + 0.35));
-    s += `<defs><filter id="sil"><feFlood flood-color="#fff"/><feComposite in2="SourceAlpha" operator="in"/></filter></defs>`;
-    if (kc > 0) s += `<g opacity="${kc * 0.9}" filter="url(#sil)">${place(hugo({ g: 1, grime: false, mouth: 'smile' }), 800, 1880, 0.95)}</g>
-      <text x="800" y="${980 + Math.sin(t * 4) * 10}" text-anchor="middle" font-family="Lilita" font-size="200" fill="#ff7a2f" ${st(12)} paint-order="stroke">?</text>`;
-    s += place(hugo({ t, mood: 'determined', mouth: 'grit', armR: lerp(-6, -152, up), fistR: true, armL: 8 }), lerp(540, 330, kc), lerp(2150, 1960, up), lerp(1.18, 0.95, kc));
-    for (let i = 0; i < 8; i++) {
-      const k = (lt * 1.6 + i / 8) % 1, a = i * 0.8;
-      s += `<path d="M${540 + Math.cos(a) * (420 + k * 300)},${800 + Math.sin(a) * (420 + k * 300)} l${Math.cos(a) * 90},${Math.sin(a) * 90}" stroke="#fff" stroke-width="12" stroke-linecap="round" opacity="${1 - k}"/>`;
-    }
-    return s;
-  },
-  // «¿Por dónde empieza? / Comenta: ducha o gym. / Sígueme para el día uno.»
-  G(lt, t) {
-    let s = classroom(t);
-    s += `<rect width="1080" height="1920" fill="${OUT}" opacity=".45"/>`;
-    s += place(hugo({ t, mood: 'normal', mouth: 'o', look: Math.sin(t * 1.6), lookY: -1, blink: blinkAt(t, 1.4), armR: -150 + Math.sin(t * 3) * 4 }), 540, 2060 + Math.sin(t * 3) * 5, 1.15);
-    for (let i = 0; i < 3; i++) {
-      const k = (lt * 0.6 + i / 3) % 1;
-      s += `<text x="${300 + i * 240}" y="${lerp(1000, 820, k)}" text-anchor="middle" font-family="Lilita" font-size="${90 + i * 10}" fill="#ffd23f" opacity="${Math.sin(k * Math.PI)}" ${st(8)} paint-order="stroke">?</text>`;
-    }
-    const tA = wordTime(9, 'ducha'), tB = wordTime(9, 'gym');
-    const pulse = (tw) => { const d = t - tw; return d > 0 && d < 0.5 ? Math.sin(d / 0.5 * Math.PI) * 0.12 : 0; };
-    const k1 = back(seg(lt, 0.05, 0.4)), k2 = back(seg(lt, 0.2, 0.55));
-    s += card(290, 600 + Math.sin(t * 2.2) * 8, -6, k1 * (1 + pulse(tA)), '#3b8de0', 'DUCHA', SHOWER);
-    s += card(790, 600 + Math.sin(t * 2.2 + 1) * 8, 6, k2 * (1 + pulse(tB)), '#ff8a2a', 'GYM', DUMBBELL);
-    const kv = back(seg(lt, 0.4, 0.7));
-    s += `<text x="540" y="650" text-anchor="middle" font-family="Lilita" font-size="${130 * kv}" fill="#ffd23f" ${st(12)} paint-order="stroke">VS</text>`;
-    return s;
-  },
-};
-const SCENE_OF = ['A', 'R', 'S', 'B', 'C', 'D', 'E', 'F', 'G', 'G', 'G'];
-
+// ---------- subtítulos ----------
 // ---------- subtítulos ----------
 function captions(t) {
   const L = TL.lines;
@@ -531,17 +379,16 @@ function captions(t) {
 }
 
 // ---------- portada (primer fotograma) ----------
-const COVER = { day: 0 };
 function cover() {
   let s = burst(540, 900, 0, '#ff7a2f', '#ffa94d');
   s += `<defs><radialGradient id="cg" cx="50%" cy="47%" r="60%"><stop offset="0" stop-color="#ffe066" stop-opacity=".9"/><stop offset="1" stop-color="#ffe066" stop-opacity="0"/></radialGradient></defs><rect width="1080" height="1920" fill="url(#cg)"/>`;
-  s += place(hugo({ t: 1.35, mood: "normal", mouth: "open" }), 540, 2270, 1.5);
+  s += place(hugo(Object.assign({ t: 1.35, mood: 'normal', mouth: 'open' }, EP.coverHugo || {})), 540, 2270, 1.5);
   s += `<g transform="translate(540,530) rotate(-5)">
-    <text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="250" fill="#ffd23f" stroke="${OUT}" stroke-width="30" paint-order="stroke" stroke-linejoin="round">DÍA ${COVER.day}</text></g>`;
+    <text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="250" fill="#ffd23f" stroke="${OUT}" stroke-width="30" paint-order="stroke" stroke-linejoin="round">DÍA ${EP.day}</text></g>`;
   s += `<g transform="translate(540,1500) rotate(-2)">
     <rect x="-470" y="-95" width="940" height="190" rx="40" fill="#ff2e48" ${st(10)}/>
-    <text x="0" y="-12" text-anchor="middle" font-family="Lilita" font-size="70" fill="#fff">30 DÍAS PARA</text>
-    <text x="0" y="62" text-anchor="middle" font-family="Lilita" font-size="70" fill="#ffd23f">CONQUISTAR A LAURA</text></g>`;
+    <text x="0" y="-12" text-anchor="middle" font-family="Lilita" font-size="70" fill="#fff">${EP.coverLine1 || '30 DÍAS PARA'}</text>
+    <text x="0" y="62" text-anchor="middle" font-family="Lilita" font-size="70" fill="#ffd23f">${EP.coverLine2 || 'CONQUISTAR A LAURA'}</text></g>`;
   return s;
 }
 
@@ -562,19 +409,17 @@ function render(t) {
   const enter = easeOut(seg(lt, 0, 0.3));
   const cam = lerp(1.1, 1, enter) * (1 + 0.035 * seg(lt, 0, 5));
   let shx = 0, shy = 0;
-  if (sc === 'F' && lt < 0.6) { const a = (1 - lt / 0.6) * 18; shx = Math.sin(t * 90) * a; shy = Math.cos(t * 77) * a; }
-  const hudStart = L[5].start + 0.5;
-  const pct = t < hudStart + 0.3 ? 50 : lerp(50, 5, easeOut(seg(t, hudStart + 0.3, hudStart + 1.3)));
-  let hx = 0;
-  if (t > hudStart + 1.1 && t < hudStart + 1.6) hx = Math.sin(t * 80) * 10 * (1 - seg(t, hudStart + 1.1, hudStart + 1.6));
-  const dayPulse = Math.max(0, Math.sin(seg(t, wordTime(6, 'treinta'), wordTime(6, 'treinta') + 0.4) * Math.PI), Math.sin(seg(t, wordTime(7, 'treinta'), wordTime(7, 'treinta') + 0.4) * Math.PI));
+  const shake = EP.shake ? EP.shake(sc, lt, t) : 0;
+  if (shake > 0) { shx = Math.sin(t * 90) * shake; shy = Math.cos(t * 77) * shake; }
+  const h = EP.hud(t);
   const flash = li === 0 ? 0 : (1 - seg(lt, 0, 0.12)) * 0.45;
   const fadeEnd = seg(t, TL.total - 0.7, TL.total);
 
   let svg = `<g transform="translate(540,960) scale(${cam}) translate(-540,-960) translate(${shx},${shy})">${SCENES[sc](lt, t)}</g>`;
   svg += `<defs><radialGradient id="vig" cx="50%" cy="45%" r="75%"><stop offset="60%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".45"/></radialGradient></defs>`;
   svg += `<rect width="1080" height="1920" fill="url(#vig)"/>`;
-  svg += `<g transform="translate(${hx},0)">${hud(t, seg(t, hudStart, hudStart + 0.35), pct, dayPulse)}</g>`;
+  svg += `<g transform="translate(${h.hx || 0},0)">${hud(t, h.show, h.pct, h.dayPulse || 0, h.glow, h.days, h.glowPulse || 0)}</g>`;
+  if (h.extra) svg += h.extra;
   if (flash > 0) svg += `<rect width="1080" height="1920" fill="#fff" opacity="${flash}"/>`;
   if (fadeEnd > 0) svg += `<rect width="1080" height="1920" fill="#000" opacity="${fadeEnd}"/>`;
   document.getElementById('s').innerHTML = svg;
@@ -582,34 +427,9 @@ function render(t) {
   cap.innerHTML = captions(t);
   cap.style.opacity = 1 - fadeEnd;
 }
-window.render = render;
-render(0);
 
-// ---------- efectos de sonido ----------
-// Cada efecto: { t: segundo, f: archivo de sfx/, v: volumen, d: duración máxima opcional }
-window.sfxCues = function () {
-  const L = TL.lines, c = [];
-  const add = (t, f, v, d) => c.push({ t: Math.max(0, t), f, v, d });
-  add(0.05, 'buzz', 0.22, L[2].end);                         // moscas mientras se le presenta
-  add(L[0].end - 0.05, 'burp', 0.5);                          // «Este es Hugo.» *eructo*
-  add(L[1].start + 0.1, 'pop', 0.5);                          // sale la acreditación
-  add(wordTime(1, 'becario'), 'boing', 0.4);
-  for (let i = 0; i < 7; i++) add(L[2].start - 0.08 + 0.3 + i * 0.115, 'tick', 0.45); // contador de días sin ducha
-  add(L[3].start, 'sparkle', 0.4);                            // corazones
-  add(L[4].start - 0.08 + 0.25, 'pop', 0.55);                 // bocadillo de Laura
-  add(L[5].start - 0.08, 'whoosh', 0.6);                      // entra Marcos
-  add(L[5].start + 0.35, 'sparkle', 0.3);
-  add(L[5].start - 0.08 + 0.7, 'crack', 0.55);                // corazón roto
-  add(L[5].start + 0.85, 'fail', 0.22);                       // la barra se hunde
-  add(wordTime(6, 'treinta'), 'stamp', 0.75);                 // sello «EN 30 DÍAS»
-  add(L[7].start - 0.08, 'whoosh', 0.4);
-  add(L[7].start, 'impact', 0.6);                             // Hugo se levanta
-  add(wordTime(7, 'cambiar') - 0.1, 'magic', 0.5);            // silueta del Hugo transformado
-  add(L[8].start + 0.12, 'pop', 0.5);                         // cartas
-  add(L[8].start + 0.28, 'pop', 0.5);
-  add(L[8].start + 0.42, 'impact', 0.25);                     // VS
-  add(wordTime(9, 'ducha'), 'ding', 0.3);
-  add(wordTime(9, 'gym'), 'boing', 0.35);
-  add(TL.total - 0.9, 'whoosh', 0.3);
-  return c;
-};
+function start() {
+  buildTL();
+  window.render = render;
+  render(0);
+}

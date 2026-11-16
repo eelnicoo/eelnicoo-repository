@@ -1,6 +1,7 @@
 // Uso:
-//   node render.js --preview            -> fotogramas sueltos en out/preview/
-//   node render.js [--audio voz.mp3]    -> out/capitulo-01.mp4
+//   node render.js --ep 2 --preview [segundos…]  -> fotogramas sueltos en out/preview/
+//   node render.js --ep 2                        -> out/capitulo-02.mp4 (con audio/voz-capitulo-02.mp3 si existe)
+//   node render.js --ep 2 --audio otra.mp3       -> con otra voz
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -10,16 +11,19 @@ const dir = __dirname;
 const args = process.argv.slice(2);
 const preview = args.includes('--preview');
 const ai = args.indexOf('--audio');
-const audio = ai >= 0 ? path.resolve(args[ai + 1]) : null;
+const ei = args.indexOf('--ep');
+const EPN = String(ei >= 0 ? args[ei + 1] : '1').padStart(2, '0');
+const defAudio = path.join(dir, 'audio', `voz-capitulo-${EPN}.mp3`);
+const audio = ai >= 0 ? path.resolve(args[ai + 1]) : (fs.existsSync(defAudio) ? defAudio : null);
 const FPS = 30;
 
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
-  const tf = path.join(dir, 'timings.json');
+  const tf = path.join(dir, `timings-${EPN}.json`);
   if (fs.existsSync(tf)) await page.addInitScript(`window.TL_OVERRIDE = ${fs.readFileSync(tf, 'utf8')};`);
   page.on('pageerror', e => { console.error('Error en la página:', e.message); process.exit(1); });
-  await page.goto('file://' + path.join(dir, 'scene.html'));
+  await page.goto('file://' + path.join(dir, 'scene.html') + '?ep=' + EPN);
   await page.evaluate(() => document.fonts.ready);
   const total = await page.evaluate(() => window.TOTAL);
   console.log('Duración:', total.toFixed(2), 's');
@@ -27,7 +31,7 @@ const FPS = 30;
   if (preview) {
     const out = path.join(dir, 'out', 'preview');
     fs.mkdirSync(out, { recursive: true });
-    const times = args.filter(a => /^\d+(\.\d+)?$/.test(a)).map(Number);
+    const times = args.filter((a, i) => /^\d+(\.\d+)?$/.test(a) && args[i - 1] !== '--ep').map(Number);
     const list = times.length ? times : Array.from({ length: 12 }, (_, i) => (i + 0.5) * total / 12);
     for (const [i, t] of list.entries()) {
       await page.evaluate(t => window.render(t), t);
@@ -37,7 +41,7 @@ const FPS = 30;
     return;
   }
 
-  const outFile = path.join(dir, 'out', 'capitulo-01.mp4');
+  const outFile = path.join(dir, 'out', `capitulo-${EPN}.mp4`);
   const ff = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-'];
   // audio: voz + efectos de sonido colocados en su segundo
   const cues = await page.evaluate(() => (window.sfxCues ? window.sfxCues() : []));
