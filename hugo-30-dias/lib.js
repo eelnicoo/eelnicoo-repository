@@ -584,3 +584,6 @@ function nextVoteCues(add, li, A, B) {
 function plusBadge(t, tc, n) {
   return t > tc && t < tc + 1.0 ? `<g transform="translate(270,${440 - 60 * seg(t, tc, tc + 1.0)})" opacity="${1 - seg(t, tc + 0.6, tc + 1.0)}"><text font-family="Lilita" font-size="80" fill="#46d17f" stroke="${OUT}" stroke-width="12" paint-order="stroke">+${n}%</text></g>` : '';
 }
+const SHIRT = `<g transform="translate(0,-80)">
+  <path d="M-60,-140 L-150,-100 L-190,-20 L-120,10 L-110,-30 L-110,130 L110,130 L110,-30 L120,10 L190,-20 L150,-100 L60,-140 Q0,-90 -60,-140 Z" fill="#fff" ${st(8)}/>
+  <path d="M-60,-140 Q0,-90 60,-140" fill="none" ${st(6)}/><circle cx="-50" cy="20" r="14" fill="#4dabf7"/><path d="M30,30 l20,-20 l20,20" fill="none" stroke="#4dabf7" stroke-width="10"/></g>`;

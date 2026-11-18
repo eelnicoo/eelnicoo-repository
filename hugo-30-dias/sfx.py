@@ -174,4 +174,21 @@ for i in range(22):
     x[s0:s0 + len(t)] += np.sin(2 * np.pi * (2600 + 400 * (i % 2)) * t) * np.exp(-t * 200)
 save('chatter', x, 0.7)
 
+# whistle: silbato de entrenador
+t = T(0.7)
+save('whistle', np.sin(2 * np.pi * 2700 * t) * (0.6 + 0.4 * np.sign(np.sin(2 * np.pi * 28 * t))) * np.minimum(1, t / 0.02) * np.minimum(1, (0.7 - t) / 0.08), 0.6)
+
+# clank: discos de pesas que chocan
+t = T(0.6)
+save('clank', sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t * k) for a, f, k in [(1, 523, 9), (.7, 1371, 12), (.5, 2410, 16), (.3, 3690, 22)]) + 0.3 * hp(rng.standard_normal(len(t)), 3000) * np.exp(-t * 60))
+
+# horn: claxon de taxi
+t = T(0.55)
+sq = lambda f: np.sign(np.sin(2 * np.pi * f * t))
+save('horn', lp(sq(392) + sq(494), 3000) * np.minimum(1, t / 0.01) * np.minimum(1, (0.55 - t) / 0.03), 0.6)
+
+# shh: ¡chist!
+t = T(0.7)
+save('shh', bp(rng.standard_normal(len(t)), 2500, 7000) * np.sin(np.pi * t / 0.7) ** 0.6, 0.6)
+
 print('Efectos:', ', '.join(sorted(f[:-4] for f in os.listdir(OUT))))
