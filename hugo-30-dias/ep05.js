@@ -101,6 +101,12 @@ const SCENES = Object.assign({}, INTRO_SCENES, {
   // «Dos horas y tres tijeras rotas después…»
   T(lt, t) {
     let s = salon(t) + `<rect width="1080" height="1920" fill="${OUT}" opacity=".6"/>`;
+    // los refuerzos: Juan, el entrenador del día 3, sudando con unas tijeras rotas
+    const kj = easeOut(seg(lt, 0, 0.4));
+    s += place(juan({ t, armR: -120 + Math.sin(t * 7) * 8, mouth: 'open', look: -1 }), lerp(1400, 820, kj), 2050, 0.8);
+    s += sweat(820, 1000, t, 4);
+    s += `<g transform="translate(${lerp(1400, 820, kj) + 150},${1180 + Math.sin(t * 7) * 6}) rotate(-30)"><path d="M0,0 L-70,-90 M0,0 L40,-40" ${st(14)}/><path d="M0,0 L-70,-90 M0,0 L40,-40" stroke="#dee2e6" stroke-width="6"/></g>`;
+    if (lt > 0.4) s += `<g transform="translate(830,1720) scale(${back(seg(lt, 0.4, 0.7))})"><rect x="-150" y="-50" width="300" height="100" rx="24" fill="#e03131" ${st(7)}/><text x="0" y="22" text-anchor="middle" font-family="Lilita" font-size="60" fill="#fff">REFUERZO</text></g>`;
     const k = back(seg(lt, 0.05, 0.35));
     s += `<g transform="translate(540,560) scale(${k})"><text x="0" y="0" text-anchor="middle" font-family="Lilita" font-size="150" fill="#ffd23f">2 HORAS</text><text x="0" y="130" text-anchor="middle" font-family="Lilita" font-size="110" fill="#fff">DESPUÉS…</text></g>`;
     for (let i = 0; i < 3; i++) {
@@ -173,6 +179,7 @@ window.sfxCues = function () {
   add(wordTime(7, 'refuerzos'), 'horn', 0.3);
   // tijeras rotas
   add(L[8].start - 0.08, 'whoosh', 0.35);
+  add(L[8].start + 0.05, 'whistle', 0.35);
   for (let i = 0; i < 3; i++) add(wordTime(8, 'tijeras') + i * 0.25 + 0.6, 'clank', 0.4);
   // el degradado
   add(L[9].start - 0.08, 'impact', 0.5);

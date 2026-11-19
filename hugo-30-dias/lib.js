@@ -609,3 +609,28 @@ function bubble(x, y, txt, k, color = OUT, size = 80, tail = 'down') {
     <text x="0" y="${size * 0.35}" text-anchor="middle" font-family="Lilita" font-size="${size}" fill="${color}">${txt}</text></g>`;
 }
 
+
+// ---------- personajes de seguidores ----------
+// Juan, el entrenador: tirantes rojos, brazos enormes, silbato y placa con su nombre
+function juan(o = {}) {
+  const { armR = -10, armL = 10, mouth = 'smile', look = 0, t = 0, facepalm = false } = o;
+  const skin = '#c98b5e';
+  let s = '';
+  s += `<rect x="-95" y="-430" width="80" height="400" rx="26" fill="${skin}" ${st()}/><rect x="15" y="-430" width="80" height="400" rx="26" fill="${skin}" ${st()}/>`;
+  s += `<path d="M-130,-470 L130,-470 L120,-300 L-120,-300 Z" fill="#212529" ${st()}/>`;
+  s += `<path d="M-120,-8 Q-120,-60 -55,-60 Q-8,-60 -8,-8 Z" fill="#fff" ${st()}/><path d="M120,-8 Q120,-60 55,-60 Q8,-60 8,-8 Z" fill="#fff" ${st()}/>`;
+  const bigArm = (x, ang, fp) => `<g transform="translate(${x},-700) rotate(${ang})"><rect x="-55" y="-10" width="110" height="${fp ? 200 : 280}" rx="55" fill="${skin}" ${st()}/><circle cx="0" cy="${fp ? 210 : 290}" r="52" fill="${skin}" ${st()}/></g>`;
+  s += bigArm(-200, armL, false) + bigArm(200, facepalm ? -160 : armR, false);
+  s += `<path d="M-200,-720 Q-215,-560 -135,-460 L135,-460 Q215,-560 200,-720 Q100,-760 60,-700 Q0,-660 -60,-700 Q-100,-760 -200,-720 Z" fill="#e03131" ${st()}/>`;
+  s += `<rect x="40" y="-640" width="130" height="64" rx="12" fill="#fff" ${st(5)}/><text x="105" y="-596" text-anchor="middle" font-family="Lilita" font-size="38" fill="#e03131">JUAN</text>`;
+  s += `<path d="M-30,-700 Q-10,-560 -50,-520" fill="none" stroke="#ffd43b" stroke-width="6"/><rect x="-80" y="-540" width="56" height="34" rx="10" fill="#adb5bd" ${st(5)}/>`;
+  s += `<rect x="-45" y="-790" width="90" height="90" fill="${skin}" ${st()}/><rect x="-150" y="-1040" width="300" height="320" rx="120" fill="${skin}" ${st()}/>`;
+  s += `<path d="M-150,-930 Q-150,-1060 0,-1062 Q150,-1060 150,-930 Q90,-990 0,-985 Q-90,-990 -150,-930 Z" fill="#1c1c1c" ${st()}/>`;
+  for (const sx of [-1, 1]) { const x = sx * 58, y = -880; s += `<ellipse cx="${x}" cy="${y}" rx="26" ry="28" fill="#fff" ${st(6)}/><circle cx="${x + look * 9}" cy="${y + 4}" r="12" fill="${OUT}"/>`; }
+  s += `<path d="M-95,-935 L-25,-920 M95,-935 L25,-920" ${st(12)}/>`;
+  if (mouth === 'smile') s += `<path d="M-50,-790 Q0,-745 50,-790 Z" fill="#fff" ${st(6)}/>`;
+  if (mouth === 'open') s += `<ellipse cx="0" cy="-780" rx="40" ry="34" fill="#7a1f2e" ${st(6)}/>`;
+  if (mouth === 'flat') s += `<path d="M-40,-778 H40" ${st(8)}/>`;
+  if (facepalm) s += `<circle cx="10" cy="-880" r="62" fill="${skin}" ${st(7)}/>`;
+  return s;
+}
