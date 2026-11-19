@@ -191,4 +191,11 @@ save('horn', lp(sq(392) + sq(494), 3000) * np.minimum(1, t / 0.01) * np.minimum(
 t = T(0.7)
 save('shh', bp(rng.standard_normal(len(t)), 2500, 7000) * np.sin(np.pi * t / 0.7) ** 0.6, 0.6)
 
+# snip: tijeretazo
+x = np.zeros(int(SR * 0.3))
+for c0 in (0.0, 0.11):
+    i = int(c0 * SR); n = 1600
+    x[i:i + n] += hp(rng.standard_normal(n), 3500) * np.exp(-np.arange(n) / 250)
+save('snip', x, 0.7)
+
 print('Efectos:', ', '.join(sorted(f[:-4] for f in os.listdir(OUT))))

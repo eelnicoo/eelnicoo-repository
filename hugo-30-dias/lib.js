@@ -135,7 +135,8 @@ function hugo(o = {}) {
   // papada
   if (fat > 0.3) s += `<path d="M-125,-688 Q0,-600 125,-688 Q0,-650 -125,-688 Z" fill="${skin}" ${st(7)}/><path d="M-70,-648 Q0,-622 70,-648" fill="none" ${st(5)}/>`;
   // barba
-  if (d > 0.3) {
+  const beard = o.beard ?? EP.beard ?? (d > 0.3 ? 'patchy' : g >= 0.5 ? 'neat' : 'none');
+  if (beard === 'patchy') {
     s += `<g fill="${beardC}" opacity=".92">
       <path d="M-196,-830 Q-200,-720 -115,-680 Q-150,-740 -158,-805 Z"/>
       <path d="M196,-840 Q205,-700 80,-668 Q55,-700 118,-716 Q160,-760 152,-840 Z"/>
@@ -144,20 +145,24 @@ function hugo(o = {}) {
     for (let i = 0; i < 40; i++) { const a = Math.PI * (0.05 + 0.9 * ((i * 0.618) % 1)), r = 120 + ((i * 29) % 70); dots += `<circle cx="${Math.cos(a) * r * 1.05}" cy="${-800 + Math.sin(a) * r * 0.75}" r="3.5"/>`; }
     s += `<g fill="${beardC}" opacity=".75">${dots}</g>`;
     s += `<path d="M-48,-748 q22,-12 42,-2 M8,-750 q22,-6 40,8" fill="none" stroke="${beardC}" stroke-width="7" stroke-linecap="round"/>`;
-  } else if (g >= 0.5) {
+  } else if (beard === 'neat') {
     s += `<path d="M-192,-830 Q-198,-680 0,-658 Q198,-680 192,-830 Q172,-725 100,-712 Q40,-738 0,-730 Q-40,-738 -100,-712 Q-172,-725 -192,-830 Z" fill="${beardC}"/>`;
     s += `<path d="M-50,-750 Q0,-772 50,-750 Q0,-760 -50,-750 Z" fill="${beardC}" ${st(4)}/>`;
   }
   // granos
   if (d > 0) for (const [x, y, r] of [[-125, -905, 10], [118, -935, 9], [-62, -985, 8], [145, -790, 10], [-160, -775, 9], [35, -1002, 7], [80, -890, 7]])
     s += `<g opacity="${d}"><circle cx="${x}" cy="${y}" r="${r}" fill="#e0493e"/><circle cx="${x - 2}" cy="${y - 2}" r="${r * 0.35}" fill="#fff6d8"/></g>`;
-  // pelo
-  if (d > 0.5) {
+  // pelo: 'bowl' (tazón mal cortado) o 'fade' (degradado)
+  const hs = o.hair ?? EP.hair ?? (d > 0.5 ? 'bowl' : 'fade');
+  if (hs === 'bowl') {
     s += `<path d="M-205,-845 Q-222,-1068 0,-1082 Q222,-1068 205,-845 L192,-885 L172,-900 L150,-935 L128,-912 L100,-952 L66,-922 L36,-958 L2,-928 L-34,-962 L-66,-926 L-104,-958 L-128,-920 L-160,-940 L-176,-895 L-196,-878 Z" fill="${hair}" ${st()}/>`;
     s += `<path d="M-10,-1076 Q-46,-1140 4,-1170 Q-14,-1128 22,-1080 Z" fill="${hair}" ${st(6)}/>`;
     s += `<path d="M-120,-1030 q50,-22 100,-14 M40,-1050 q50,-4 90,16" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".4" fill="none"/>`;
   } else {
-    s += `<path d="M-188,-880 Q-205,-1045 -40,-1072 Q62,-1118 165,-1052 Q205,-990 188,-880 Q162,-962 90,-978 Q0,-994 -92,-972 Q-162,-962 -188,-880 Z" fill="${hair}" ${st()}/>`;
+    // laterales rapados (sombra corta) y tupé hacia un lado, con mucha más frente
+    s += `<path d="M-192,-860 Q-200,-960 -160,-985 L-120,-975 Q-170,-930 -180,-850 Z M192,-860 Q200,-960 160,-985 L120,-975 Q170,-930 180,-850 Z" fill="${hair}" opacity=".45"/>`;
+    s += `<path d="M-150,-972 Q-175,-1062 -60,-1098 Q70,-1140 178,-1060 Q196,-1012 162,-978 Q120,-1022 30,-1012 Q-70,-1006 -150,-972 Z" fill="${hair}" ${st()}/>`;
+    s += `<path d="M-40,-1085 Q40,-1120 130,-1080" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".45" fill="none"/><path d="M-95,-1000 Q-80,-1050 -60,-1080" stroke="${OUT}" stroke-width="5" fill="none" opacity=".6"/>`;
   }
   // ojos (pequeños, de adulto) con ojeras
   for (const sx of [-1, 1]) {
@@ -587,3 +592,20 @@ function plusBadge(t, tc, n) {
 const SHIRT = `<g transform="translate(0,-80)">
   <path d="M-60,-140 L-150,-100 L-190,-20 L-120,10 L-110,-30 L-110,130 L110,130 L110,-30 L120,10 L190,-20 L150,-100 L60,-140 Q0,-90 -60,-140 Z" fill="#fff" ${st(8)}/>
   <path d="M-60,-140 Q0,-90 60,-140" fill="none" ${st(6)}/><circle cx="-50" cy="20" r="14" fill="#4dabf7"/><path d="M30,30 l20,-20 l20,20" fill="none" stroke="#4dabf7" stroke-width="10"/></g>`;
+const LENS = `<g transform="translate(0,-80)">
+  <path d="M-170,0 Q0,-150 170,0 Q0,150 -170,0 Z" fill="#fff" ${st(8)}/><circle r="62" fill="#4dabf7" ${st(6)}/><circle r="28" fill="${OUT}"/><circle cx="-18" cy="-20" r="12" fill="#fff"/>
+  <path d="M-80,-60 Q0,-120 80,-60" fill="none" stroke="#a5d8ff" stroke-width="10" opacity=".9"/></g>`;
+
+// ---------- sudor y bocadillos ----------
+function sweat(x, y, t, n = 5) {
+  let s = '';
+  for (let i = 0; i < n; i++) { const k = (t * 1.4 + i / n) % 1; s += `<path d="M0,-18 Q14,4 0,14 Q-14,4 0,-18 Z" transform="translate(${x + (i - n / 2) * 60},${y + k * 160}) scale(1.4)" fill="#74c0fc" opacity="${1 - k}" ${st(3)}/>`; }
+  return s;
+}
+function bubble(x, y, txt, k, color = OUT, size = 80, tail = 'down') {
+  const w = 80 + txt.length * size * 0.55;
+  return `<g transform="translate(${x},${y}) scale(${k})"><rect x="${-w / 2}" y="-75" width="${w}" height="150" rx="50" fill="#fff" ${st(9)}/>
+    ${tail === 'down' ? `<path d="M-30,70 L0,130 L30,70" fill="#fff" ${st(9)}/><rect x="-35" y="55" width="70" height="20" fill="#fff"/>` : ''}
+    <text x="0" y="${size * 0.35}" text-anchor="middle" font-family="Lilita" font-size="${size}" fill="${color}">${txt}</text></g>`;
+}
+

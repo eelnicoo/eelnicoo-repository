@@ -67,18 +67,6 @@ function barbell(cx, y, plates, lift = 0) {
   for (const sx of [-1, 1]) for (let i = 0; i < plates; i++) s += `<rect x="${sx * (300 + i * 36) - 16}" y="-110" width="32" height="220" rx="10" fill="${i % 2 ? '#e03131' : '#1c7ed6'}" ${st(6)}/>`;
   return s + '</g>';
 }
-function sweat(x, y, t, n = 5) {
-  let s = '';
-  for (let i = 0; i < n; i++) { const k = (t * 1.4 + i / n) % 1; s += `<path d="M0,-18 Q14,4 0,14 Q-14,4 0,-18 Z" transform="translate(${x + (i - n / 2) * 60},${y + k * 160}) scale(1.4)" fill="#74c0fc" opacity="${1 - k}" ${st(3)}/>`; }
-  return s;
-}
-function bubble(x, y, txt, k, color = OUT, size = 80, tail = 'down') {
-  const w = 80 + txt.length * size * 0.55;
-  return `<g transform="translate(${x},${y}) scale(${k})"><rect x="${-w / 2}" y="-75" width="${w}" height="150" rx="50" fill="#fff" ${st(9)}/>
-    ${tail === 'down' ? `<path d="M-30,70 L0,130 L30,70" fill="#fff" ${st(9)}/><rect x="-35" y="55" width="70" height="20" fill="#fff"/>` : ''}
-    <text x="0" y="${size * 0.35}" text-anchor="middle" font-family="Lilita" font-size="${size}" fill="${color}">${txt}</text></g>`;
-}
-
 // ---------- escenas ----------
 const SCENES = Object.assign({}, INTRO_SCENES, {
   V(lt, t) { return voteScene(lt, t, 4); },
