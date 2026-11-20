@@ -90,9 +90,11 @@ function hugo(o = {}) {
   const { mood = 'normal', mouth = 'smile', armL = 6, armR = -6, fistR = false, g = EP.glow, t = 0, grime = true, look = 0, lookY = 0, blink = false } = o;
   const w = lerp(1.55, 1, g), d = clamp(1 - g * 2.2), fat = clamp(1 - g * 2);
   const su = o.sucio ?? (EP.sucio ?? d); // suciedad: moscas, tufo, manchas, mocos, aliento
-  const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', jeans = '#3b5a9a';
+  const skin = d > 0.5 ? '#efbd95' : '#f5c6a0', jeans = (o.outfit ?? EP.outfit) === 'shirt' ? '#2b4170' : '#3b5a9a';
   const nk = !!o.naked; // sin sudadera (en la ducha)
-  const hood = nk ? skin : '#3fae6a', hoodD = nk ? '#e0a47c' : '#2b8a50';
+  const outfit = o.outfit ?? EP.outfit ?? 'hoodie'; // 'hoodie' (sudadera verde) o 'shirt' (camisa negra)
+  const sh = !nk && outfit === 'shirt';
+  const hood = nk ? skin : sh ? '#212529' : '#3fae6a', hoodD = nk ? '#e0a47c' : sh ? '#343a40' : '#2b8a50';
   const hair = '#a8552a', beardC = '#6b3f22';
   const lw = lerp(66, 88, fat), lx = lerp(12, 22, fat);
   let s = '';
@@ -119,15 +121,17 @@ function hugo(o = {}) {
   }
   const hy = lerp(-380, -425, fat);
   s += `<path d="M${-138 * w},-662 Q${-185 * w},-540 ${-128 * w},${hy} L${128 * w},${hy} Q${185 * w},-540 ${138 * w},-662 Q0,-700 ${-138 * w},-662 Z" fill="${hood}" ${st()}/>`;
-  if (!nk) s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
+  if (sh) s += `<path d="M0,-650 V${hy}" stroke="#495057" stroke-width="5"/>${[-600, -540, -480].map(y => `<circle cx="0" cy="${y}" r="6" fill="#adb5bd"/>`).join('')}`;
+  if (!nk && !sh) s += `<path d="M${-72 * w},${hy - 90} L${72 * w},${hy - 90} L${88 * w},${hy - 18} L${-88 * w},${hy - 18} Z" fill="${hoodD}" ${st(6)}/>`;
   if (nk) { let ch = ''; for (let i = 0; i < 22; i++) { const x = ((i * 47) % 200) - 100, y = -640 + ((i * 31) % 150); ch += `M${x},${y} q5,-9 10,-2 `; } s += `<path d="${ch}" fill="none" stroke="#5b3a26" stroke-width="3.5" stroke-linecap="round"/><circle cx="-60" cy="-560" r="7" fill="#d98c74"/><circle cx="60" cy="-560" r="7" fill="#d98c74"/>`; }
-  if (!nk) s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
-  if (!nk) s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
+  if (!nk && !sh) s += `<path d="M-26,-655 L-32,-565 M26,-655 L32,-565" ${st(6)}/>`;
+  if (!nk && !sh) s += `<circle cx="-32" cy="-560" r="7" fill="#fff" ${st(4)}/><circle cx="32" cy="-560" r="7" fill="#fff" ${st(4)}/>`;
   if (su > 0 && !nk) s += `<g opacity="${su}"><path d="M${-75 * w},-590 q20,-22 42,-4 q14,22 -8,30 q-26,8 -34,-26 Z" fill="#e8b923"/>
       <path d="M${55 * w},-520 q24,-16 40,4 q8,26 -18,28 q-30,0 -22,-32 Z" fill="#c0392b"/>
       <circle cx="${95 * w}" cy="-610" r="14" fill="${hoodD}"/><circle cx="${-40 * w}" cy="-470" r="11" fill="${hoodD}"/></g>`;
   s += `<rect x="-34" y="-725" width="68" height="75" fill="${skin}" ${st()}/>`;
-  if (!nk) s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
+  if (!nk && !sh) s += `<path d="M-110,-668 Q0,-620 110,-668 Q0,-700 -110,-668 Z" fill="${hoodD}" ${st(6)}/>`;
+  if (sh) s += `<path d="M-40,-668 L0,-610 L-70,-630 Z M40,-668 L0,-610 L70,-630 Z" fill="#343a40" ${st(5)}/>`;
   // cabeza: forma de pera, más ancha abajo (mofletes) cuanto más gordo
   const jw = lerp(0.86, 1.08, fat);
   s += `<circle cx="-186" cy="-842" r="36" fill="${skin}" ${st()}/><circle cx="186" cy="-842" r="36" fill="${skin}" ${st()}/>`;
@@ -263,7 +267,7 @@ function laura(o = {}) {
 }
 
 function marcos(o = {}) {
-  const { t = 0 } = o;
+  const { t = 0, noGlasses = false } = o;
   const skin = '#d99a6c', jacket = '#26263a', jeans = '#2f3045';
   let s = '';
   s += `<rect x="-92" y="-430" width="78" height="400" rx="24" fill="${jeans}" ${st()}/>`;
@@ -278,8 +282,8 @@ function marcos(o = {}) {
   s += `<rect x="-42" y="-790" width="84" height="85" fill="${skin}" ${st()}/>`;
   s += `<rect x="-150" y="-1045" width="300" height="335" rx="115" fill="${skin}" ${st()}/>`;
   s += `<path d="M-152,-930 Q-172,-1082 -20,-1092 Q62,-1158 152,-1082 Q178,-1000 152,-930 Q122,-1002 0,-1002 Q-100,-992 -152,-930 Z" fill="#141414" ${st()}/>`;
-  s += `<rect x="-125" y="-925" width="110" height="62" rx="22" fill="#141414" ${st(6)}/><rect x="15" y="-925" width="110" height="62" rx="22" fill="#141414" ${st(6)}/>`;
-  s += `<path d="M-15,-905 H15" ${st(8)}/><path d="M-100,-910 l30,0 M40,-910 l30,0" stroke="#fff" stroke-width="6" opacity=".7"/>`;
+  if (noGlasses) s += [-70, 70].map(x => `<ellipse cx="${x}" cy="-895" rx="30" ry="34" fill="#fff" ${st(6)}/><circle cx="${x - 8}" cy="-890" r="10" fill="${OUT}"/>`).join('') + `<path d="M-105,-950 L-40,-935 M105,-950 L40,-935" ${st(9)}/>`;
+  else s += `<rect x="-125" y="-925" width="110" height="62" rx="22" fill="#141414" ${st(6)}/><rect x="15" y="-925" width="110" height="62" rx="22" fill="#141414" ${st(6)}/>` + `<path d="M-15,-905 H15" ${st(8)}/><path d="M-100,-910 l30,0 M40,-910 l30,0" stroke="#fff" stroke-width="6" opacity=".7"/>`;
   s += `<path d="M-40,-790 Q20,-772 58,-808" fill="none" ${st(8)}/>`;
   s += `<path d="M-15,-738 Q0,-728 15,-738" fill="none" ${st(5)}/>`;
   // brillitos
@@ -634,3 +638,6 @@ function juan(o = {}) {
   if (facepalm) s += `<circle cx="10" cy="-880" r="62" fill="${skin}" ${st(7)}/>`;
   return s;
 }
+const RAZOR = `<g transform="translate(0,-80) rotate(-30)">
+  <rect x="-24" y="-20" width="48" height="200" rx="18" fill="#4dabf7" ${st(7)}/><rect x="-90" y="-80" width="180" height="70" rx="14" fill="#e9ecef" ${st(7)}/>
+  <path d="M-80,-60 H80 M-80,-40 H80" stroke="#868e96" stroke-width="5"/><circle cx="-60" cy="-130" r="26" fill="#fff" ${st(5)}/><circle cx="-20" cy="-150" r="18" fill="#fff" ${st(5)}/></g>`;
